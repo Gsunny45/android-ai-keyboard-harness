@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-json:
+    name: Lint JSON configs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate triggers.json
+        run: python3 -m json.tool templates/triggers.json > /dev/null && echo "triggers.json OK"
+
+      - name: Validate per-app profiles
+        run: |
+          for f in templates/per-app-profiles/*.json; do
+            python3 -m json.tool "$f" > /dev/null && echo "$f OK"
+          done
