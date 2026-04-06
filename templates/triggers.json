@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "1.0",
+  "defaultModel": "qwen2.5-coder-1.5b-uncensored",
+  "defaultEndpoint": "http://127.0.0.1:8080/v1/chat/completions",
+  "triggers": {
+    "/formal": {
+      "pipeline": "cot",
+      "system": "Rewrite the user's text in formal, professional tone. Preserve meaning exactly. Output only the rewritten text.",
+      "temperature": 0.3,
+      "max_tokens": 256
+    },
+    "/casual": {
+      "pipeline": "cot",
+      "system": "Rewrite the user's text in casual, friendly tone. Keep it natural. Output only the rewritten text.",
+      "temperature": 0.5,
+      "max_tokens": 256
+    },
+    "/code": {
+      "pipeline": "cot",
+      "system": "You are a code assistant. Convert the user's natural language description into clean, working code. Be concise.",
+      "temperature": 0.1,
+      "max_tokens": 512
+    },
+    "/expand": {
+      "pipeline": "cot",
+      "system": "Expand the user's brief notes into a full, well-written paragraph. Match their implied tone.",
+      "temperature": 0.5,
+      "max_tokens": 512
+    },
+    "/fix": {
+      "pipeline": "cot",
+      "system": "Fix grammar, spelling, and punctuation in the user's text. Preserve their voice and meaning. Output only the corrected text.",
+      "temperature": 0.2,
+      "max_tokens": 256
+    },
+    "<<cot>>": {
+      "pipeline": "cot",
+      "system": "Think step by step about the user's request.\nStep 1: Understand the intent\nStep 2: Identify key requirements\nStep 3: Draft response\nStep 4: Verify accuracy\n\nOutput your final answer after 'FINAL:'",
+      "temperature": 0.4,
+      "max_tokens": 512,
+      "extract_pattern": "FINAL: (.*)"
+    },
+    "<<tot>>": {
+      "pipeline": "tot",
+      "system": "Generate 3 alternative approaches to the user's request.\n\nApproach A:\nApproach B:\nApproach C:\n\nEvaluate each on clarity, accuracy, and tone (1-5).\nSelect the best and output it after 'BEST:'",
+      "temperature": 0.5,
+      "max_tokens": 768,
+      "extract_pattern": "BEST: (.*)",
+      "branches": 3
+    },
+    "/meta": {
+      "pipeline": "tot",
+      "system": "You are a meta-skill builder. Given the user's task description, generate a new JSON skill config with: id, name, trigger, system prompt, pipeline (cot or tot), temperature, and max_tokens. Output valid JSON only.",
+      "temperature": 0.7,
+      "max_tokens": 1024
+    }
+  },
+  "personas": {
+    "professional": {
+      "tone": "formal",
+      "avoid": ["gonna", "wanna", "stuff", "basically"],
+      "prefer": ["implement", "establish", "facilitate"],
+      "contractions": false
+    },
+    "casual": {
+      "tone": "conversational",
+      "contractions": true,
+      "sentence_length": "short"
+    },
+    "technical": {
+      "tone": "precise",
+      "vocabulary": "domain-specific",
+      "contractions": false
+    }
+  }
+}
