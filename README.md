@@ -127,6 +127,23 @@ bash ~/harness/scripts/termux-setup.sh
 
 ---
 
+## Forked Repos
+
+All upstream repos forked into `Gsunny45` for active development:
+
+| Fork | Role |
+|---|---|
+| [Gsunny45/florisboard](https://github.com/Gsunny45/florisboard) | IME base keyboard |
+| [Gsunny45/SwiftSlate](https://github.com/Gsunny45/SwiftSlate) | Accessibility trigger layer |
+| [Gsunny45/SmolChat-Android](https://github.com/Gsunny45/SmolChat-Android) | GGUF LLM runner |
+| [Gsunny45/whisper-to-input](https://github.com/Gsunny45/whisper-to-input) | Voice IME |
+| [Gsunny45/ChatterUI](https://github.com/Gsunny45/ChatterUI) | llama.cpp frontend |
+| [Gsunny45/textexpander_android](https://github.com/Gsunny45/textexpander_android) | Espanso trigger engine |
+| [Gsunny45/KeyboardGPT](https://github.com/Gsunny45/KeyboardGPT) | Xposed LLM keyboard |
+| [Gsunny45/mlc-llm](https://github.com/Gsunny45/mlc-llm) | GPU-accelerated inference |
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
