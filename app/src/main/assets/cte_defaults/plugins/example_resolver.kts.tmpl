@@ -1,0 +1,34 @@
+// example_resolver.kts.tmpl
+// Copy to e.g. 00_my_resolver.kts to activate.
+//
+// Adds a new namespace `mycorp.*` and a new pipe `frontmatter:KEY`.
+
+import dev.patrickgold.florisboard.ime.ai.context.cte
+
+cte.registerResolver("mycorp.team") {
+    // suspend fun () -> String?
+    // Return null to fall through; return "" to substitute empty.
+    System.getenv("TEAM_NAME") ?: "unset"
+}
+
+cte.registerResolver("mycorp.repo") {
+    // Read from a file the user maintains.
+    val f = java.io.File("/storage/emulated/0/cte/mycorp_repo.txt")
+    if (f.exists()) f.readText().trim() else null
+}
+
+cte.registerPipe("frontmatter") { input, args ->
+    // {{file.content|frontmatter:title}} → grabs `title:` from YAML.
+    val key = args.firstOrNull() ?: return@registerPipe input
+    val match = Regex("(?m)^${Regex.escape(key)}:\\s*(.+)$").find(input)
+    match?.groupValues?.get(1)?.trim() ?: ""
+}
+
+// Register a hook that runs before every prompt is sent.
+// Use sparingly; runs on the IME thread.
+cte.beforePrompt { req ->
+    // Example: refuse to send anything containing the word SECRET to cloud.
+    if (req.provider != "local" && req.userText.contains("SECRET", ignoreCase = true)) {
+        req.cancel("Contains SECRET keyword; cloud send blocked.")
+    }
+}

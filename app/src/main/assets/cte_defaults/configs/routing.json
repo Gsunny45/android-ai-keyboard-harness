@@ -1,0 +1,48 @@
+{
+  "default": "local",
+  "killSwitch": false,
+  "killSwitchReason": "set true to force all requests local-only (e.g. travel, billing freeze)",
+
+  "rules": [
+    { "if": "trigger.pipeline == 'tot'",                                  "use": "anthropic" },
+    { "if": "trigger.pipeline == 'cot' && trigger.maxTokens > 1024",      "use": "anthropic" },
+    { "if": "trigger.budget == 'premium'",                                "use": "anthropic" },
+    { "if": "trigger.budget == 'cheap' && provider.deepseek.available",   "use": "deepseek" },
+    { "if": "provider.local.unreachable",                                 "use": "gemini_1" },
+    { "if": "provider.gemini_1.rateLimited",                              "use": "gemini_2" },
+    { "if": "provider.gemini_2.rateLimited",                              "use": "openai" }
+  ],
+
+  "circuitBreaker": {
+    "consecutiveFailuresToOpen": 2,
+    "openDurationMs":             60000,
+    "halfOpenProbeIntervalMs":   120000
+  },
+
+  "rateLimitHandling": {
+    "honorRetryAfter":   true,
+    "maxBackoffMs":     300000,
+    "jitterMs":           1000
+  },
+
+  "guardrails": {
+    "redactClipboardOver":  256,
+    "redactSelectionOver":  256,
+    "blockOnPiiPattern":    true,
+    "piiPatterns": [
+      "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+      "\\b(?:\\d[ -]*?){13,16}\\b",
+      "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
+    ],
+    "piiAction": "warn_and_strip"
+  },
+
+  "monitoring": {
+    "eventLog":           "logs/events.jsonl",
+    "eventLogMaxBytes":   5242880,
+    "captureRuns":        false,
+    "runsDir":            "runs/",
+    "runsKeepLast":       50,
+    "metricsEndpoint":    "http://127.0.0.1:8080/metrics"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "voice_normalize_table",
+  "description": "Spoken phrases must normalize to canonical trigger tokens.",
+  "cases": [
+    { "input": "slash formal write a thank you note", "expect": "/formal write a thank you note" },
+    { "input": "Slash fix.",                          "expect": "/fix" },
+    { "input": "double angle cot explain entropy",    "expect": "<<cot>> explain entropy" },
+    { "input": "cot mode explain entropy",            "expect": "<<cot>> explain entropy" },
+    { "input": "slash em o c project notes",          "expect": "/moc project notes" },
+    { "input": "ordinary text no trigger",            "expect": "ordinary text no trigger" },
+    { "input": "cancel",                              "expect": "__ABORT__" }
+  ]
+}

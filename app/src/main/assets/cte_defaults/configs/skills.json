@@ -1,0 +1,72 @@
+{
+  "skills": {
+    "vault_aware_draft": {
+      "description": "Generate text aware of vault + active file context, then polish.",
+      "inputs": ["user_input"],
+      "context_required": ["vault.name", "file.path"],
+      "system": "Vault: {{vault.name}}\nFile: {{file.path}}\nTags: {{#each file.tags}}#{{this}} {{/each}}\nDraft a response in the vault's style. Use [[wikilinks]] where appropriate.",
+      "user": "{{user_input}}",
+      "provider": "local",
+      "max_tokens": 1024,
+      "chain_next": ["grammar_fix", "tone_align"],
+      "on_error": "fallback_provider"
+    },
+    "grammar_fix": {
+      "description": "Fix grammar/spelling without altering meaning.",
+      "inputs": ["chain.previous"],
+      "system": "Fix grammar and spelling. Preserve meaning, voice, markdown, wikilinks, and code blocks. Return only the corrected text.",
+      "user": "{{chain.previous}}",
+      "provider": "local",
+      "max_tokens": 1024,
+      "on_error": "skip"
+    },
+    "tone_align": {
+      "description": "Rewrite to match a persona's tone, preserving structure.",
+      "inputs": ["chain.previous"],
+      "system": "Rewrite to match persona '{{persona.tone}}'. Keep all wikilinks, frontmatter, and code intact. Return only the rewritten text.",
+      "user": "{{chain.previous}}",
+      "provider": "local",
+      "max_tokens": 1024,
+      "on_error": "skip"
+    },
+    "atomic_note": {
+      "description": "Convert input into an atomic Obsidian note.",
+      "inputs": ["user_input"],
+      "system": "Convert input into an atomic Obsidian note: 1 idea, YAML frontmatter with tags, [[links]] for entities, body under 200 words.",
+      "user": "{{user_input}}",
+      "provider": "anthropic",
+      "max_tokens": 800,
+      "on_error": "abort"
+    },
+    "moc_builder": {
+      "description": "Build a Map-of-Content for the active vault.",
+      "inputs": ["user_input"],
+      "context_required": ["vault.name"],
+      "system": "Build a Map-of-Content for vault '{{vault.name}}'. Group {{user_input}} into 3-7 themes with [[wikilinks]]. Output markdown only.",
+      "user": "{{user_input}}",
+      "provider": "anthropic",
+      "max_tokens": 1500,
+      "on_error": "abort"
+    },
+    "tot_decompose": {
+      "description": "Tree-of-thought: 3 approaches, score, return best.",
+      "inputs": ["user_input"],
+      "pipeline": "tot",
+      "branches": 3,
+      "system": "Generate 3 distinct approaches to: {{user_input}}. Score each 1-10 on novelty, feasibility, fit. Return the top as FINAL: ...",
+      "user": "{{user_input}}",
+      "provider": "anthropic",
+      "max_tokens": 1500,
+      "on_error": "abort"
+    },
+    "code_review": {
+      "description": "Review selected code for bugs, perf, and clarity.",
+      "inputs": ["selection.text"],
+      "system": "Review the following code. List: (1) bugs, (2) perf issues, (3) clarity improvements. Be concrete. No compliments.",
+      "user": "{{selection.text}}",
+      "provider": "anthropic",
+      "max_tokens": 1500,
+      "on_error": "abort"
+    }
+  }
+}

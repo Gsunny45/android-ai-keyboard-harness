@@ -1,0 +1,21 @@
+{
+  "name": "obsidian_doc_basic",
+  "description": "/doc trigger inside Obsidian profile produces vault-aware doc with wikilinks.",
+  "input": {
+    "trigger": "/doc",
+    "user_input": "Explain the layered context engine.",
+    "context": {
+      "vault.name": "MyVault",
+      "vault.path": "/storage/emulated/0/MyVault",
+      "file.path": "tech/florisboard.md",
+      "file.tags": ["project/florisvault", "ime"],
+      "app.package": "md.obsidian"
+    }
+  },
+  "expect": {
+    "matches": "FINAL:\\s*.+",
+    "contains_any": ["[[", "vault", "context"],
+    "min_len": 80,
+    "not_contains": ["I cannot", "I'm sorry", "as an AI"]
+  }
+}

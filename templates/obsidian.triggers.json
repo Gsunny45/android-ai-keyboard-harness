@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 2,
+  "basePersona": "technical",
+  "context_source": "obsidian_vault_property",
+  "triggers": {
+    "/doc": {
+      "pipeline": "cot",
+      "provider": "local",
+      "fallback_provider": "anthropic",
+      "system_template": "You are writing inside Obsidian vault '{{vault.name}}'.\nActive note: {{file.path}}\nTags: {{#each file.tags}}#{{this}} {{/each}}\nWrite documentation that matches the vault's existing style. Use [[wikilinks]] for cross-references. Keep frontmatter intact.",
+      "user_template": "{{user_input}}",
+      "temperature": 0.3,
+      "max_tokens": 2048,
+      "extract_pattern": "FINAL:\\s*(.*)"
+    },
+    "/summarize": {
+      "pipeline": "cot",
+      "provider": "local",
+      "fallback_provider": "anthropic",
+      "system_template": "You are inside Obsidian vault '{{vault.name}}'. Active note: {{file.path}}\nTags: {{#each file.tags}}#{{this}} {{/each}}\n\nSummarize the following content concisely. Preserve key facts, decisions, and action items. Use Obsidian [[wikilinks]] for any referenced notes. Output format:\n\n## Summary\n- Key point 1\n- Key point 2\n\n## Decisions\n- Decision: ... rationale: ...\n\n## Action Items\n- [ ] Action: ... owner: ...\n\n---\nContent to summarize:\n{{user_input}}",
+      "user_template": "",
+      "temperature": 0.2,
+      "max_tokens": 1024,
+      "extract_pattern": "FINAL:\\s*(.*)"
+    },
+    "/link": {
+      "pipeline": "cot",
+      "provider": "anthropic",
+      "system_template": "You are inside Obsidian vault '{{vault.name}}'.\nActive note: {{file.path}}\nTags: {{#each file.tags}}#{{this}} {{/each}}\n\nThe user wants to create or find links for the following concept. Suggest 3-5 existing or new note titles that should be linked, using [[wikilink]] format. For each suggestion, explain the relationship.\n\nOutput format:\n- [[Suggested Note Title 1]] — relationship explanation\n- [[Suggested Note Title 2]] — relationship explanation",
+      "user_template": "Concept to link: {{user_input}}",
+      "temperature": 0.4,
+      "max_tokens": 1024
+    },
+    "/daily": {
+      "pipeline": "cot",
+      "provider": "local",
+      "system_template": "You are inside Obsidian vault '{{vault.name}}'.\nToday's date: {{time.date}} ({{time.weekday}})\nActive note: {{file.path}}\n\nGenerate a daily note entry. Include:\n- A \"## Tasks\" section with todo checkboxes\n- A \"## Notes\" section for quick captures\n- A \"## Gratitude\" section with one thing\n\nIf the user provides specific content, incorporate it. Match vault tone.",
+      "user_template": "{{user_input}}",
+      "temperature": 0.5,
+      "max_tokens": 1024
+    },
+    "/atomic": {
+      "pipeline": "cot",
+      "provider": "local",
+      "system_template": "You are inside Obsidian vault '{{vault.name}}'.\nActive note: {{file.path}}\n\nCreate an atomic note (Zettelkasten style) for the following concept. Follow these rules:\n1. Title is the core concept (noun-phrase)\n2. Body is 2-5 sentences — one idea only\n3. Suggest 2-3 backlinks to existing notes using [[wikilinks]]\n4. Suggest 3 tags that categorize the note\n\nOutput format:\n---\ntags: [tag1, tag2, tag3]\n---\n# Atomic Note: [[Suggested Title]]\n\n[Body text here]\n\n## Related\n- [[Existing Note 1]]\n- [[Existing Note 2]]",
+      "user_template": "Concept: {{user_input}}",
+      "temperature": 0.3,
+      "max_tokens": 1024
+    },
+    "/moc": {
+      "pipeline": "tot",
+      "provider": "anthropic",
+      "system_template": "You are inside Obsidian vault '{{vault.name}}'.\nGenerate a Map of Content (MOC) for the topic: {{user_input}}\n\nStructure the MOC with:\n1. A brief definition sentence\n2. Sections grouping related sub-topics\n3. Each entry as a [[wikilink]] with a 1-line description\n4. Suggested tags at the bottom\n\nOutput as clean markdown ready for Obsidian.",
+      "user_template": "",
+      "temperature": 0.4,
+      "max_tokens": 1536,
+      "branches": 3
+    }
+  }
+}

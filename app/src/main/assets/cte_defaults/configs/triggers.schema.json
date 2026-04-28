@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://florisboard-vault.local/triggers.schema.json",
+  "title": "FlorisBoard_Vault Triggers Config",
+  "type": "object",
+  "required": ["schemaVersion", "providers", "triggers"],
+  "properties": {
+    "$schema":       { "type": "string" },
+    "schemaVersion": { "const": 2 },
+    "defaultEndpoint": { "type": "string", "format": "uri" },
+
+    "providers": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/provider" }
+    },
+
+    "context_layers_global": {
+      "type": "object",
+      "additionalProperties": { "type": "object" }
+    },
+
+    "personas": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/persona" }
+    },
+
+    "triggers": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/trigger" }
+    },
+
+    "appProfiles": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/appProfile" }
+    }
+  },
+
+  "$defs": {
+    "provider": {
+      "type": "object",
+      "required": ["url", "priority"],
+      "properties": {
+        "url":           { "type": "string", "format": "uri" },
+        "model":         { "type": "string" },
+        "keyRef":        { "type": "string" },
+        "priority":      { "type": "integer", "minimum": 1 },
+        "maxTokens":     { "type": "integer", "minimum": 1 },
+        "timeoutMs":     { "type": "integer", "minimum": 1000 },
+        "dailyTokenCap": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+
+    "persona": {
+      "type": "object",
+      "properties": {
+        "tone":           { "type": "string" },
+        "avoid":          { "type": "array", "items": { "type": "string" } },
+        "context_layers": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+
+    "trigger": {
+      "type": "object",
+      "properties": {
+        "pipeline":          { "enum": ["single", "cot", "tot", "skill", "chain"] },
+        "provider":          { "type": "string" },
+        "fallback_provider": { "type": "string" },
+        "system_template":   { "type": "string" },
+        "user_template":     { "type": "string" },
+        "max_tokens":        { "type": "integer", "minimum": 1 },
+        "branches":          { "type": "integer", "minimum": 2, "maximum": 8 },
+        "extract_pattern":   { "type": "string" },
+        "output_mode":       { "enum": ["inline", "strip", "overlay"] },
+        "budget":            { "enum": ["cheap", "balanced", "premium"] },
+        "skill":             { "type": "string" },
+        "redact_payload":    { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+
+    "appProfile": {
+      "type": "object",
+      "properties": {
+        "extends":           { "type": "string" },
+        "basePersona":       { "type": "string" },
+        "context_source":    { "type": "string" },
+        "triggers_override": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

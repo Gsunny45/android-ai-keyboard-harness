@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlorisBoard Vault — Trigger Configuration Schema",
+  "description": "Validates triggers.json, obsidian.triggers.json, and per-app profile JSON files in the templates/ directory.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "description": "Schema version for forward/backward compatibility.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2
+    },
+    "basePersona": {
+      "description": "Default persona for routing tone/behaviour.",
+      "type": "string",
+      "enum": ["professional", "casual", "technical"]
+    },
+    "context_source": {
+      "description": "Where to resolve template context variables ({{vault.name}}, {{file.path}}, etc.).",
+      "type": "string",
+      "enum": ["obsidian_vault_property", "app_window", "none"]
+    },
+    "providers": {
+      "description": "Provider definitions (global triggers.json only).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string" },
+          "model": { "type": "string" },
+          "keyRef": { "type": "string" },
+          "priority": { "type": "integer", "minimum": 0 },
+          "maxTokens": { "type": "integer", "minimum": 1 },
+          "timeoutMs": { "type": "integer", "minimum": 1000 }
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      }
+    },
+    "routing": {
+      "description": "Provider routing rules (global triggers.json only).",
+      "type": "object",
+      "properties": {
+        "default": { "type": "string" },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "if": { "type": "string" },
+              "use": { "type": "string" }
+            },
+            "required": ["if", "use"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["default"],
+      "additionalProperties": false
+    },
+    "context_layers": {
+      "description": "Global context layers (global triggers.json only).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "context": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "personas": {
+      "description": "Persona definitions (global triggers.json only).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "system_prompt": { "type": "string" },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+          "max_tokens": { "type": "integer", "minimum": 1 }
+        },
+        "required": ["system_prompt"],
+        "additionalProperties": false
+      }
+    },
+    "app_profiles": {
+      "description": "Per-app persona mappings (global triggers.json only).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "extends": { "type": "string" },
+          "persona": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "triggers": {
+      "description": "Trigger definitions — may appear in any config file.",
+      "type": "object",
+      "patternProperties": {
+        "^/": {
+          "type": "object",
+          "properties": {
+            "pipeline": {
+              "type": "string",
+              "enum": ["cot", "tot"]
+            },
+            "provider": { "type": "string" },
+            "fallback_provider": { "type": "string" },
+            "system_template": { "type": "string" },
+            "user_template": { "type": "string" },
+            "temperature": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2
+            },
+            "max_tokens": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "extract_pattern": { "type": "string" },
+            "branches": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "output_mode": {
+              "type": "string",
+              "enum": ["inline", "strip", "overlay"]
+            },
+            "skill_routing": {
+              "type": "object",
+              "properties": {
+                "app": { "type": "string" },
+                "skill": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": ["pipeline"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["triggers"],
+  "additionalProperties": false
+}

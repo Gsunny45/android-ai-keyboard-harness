@@ -6,6 +6,9 @@
 build/
 .gradle/
 local.properties
+captures/
+**/build/
+**/.cxx/
 
 # Models (never commit)
 *.gguf

@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 2,
+  "basePersona": "professional",
+  "context_source": "app_window",
+  "triggers": {
+    "/reply": {
+      "pipeline": "cot",
+      "provider": "local",
+      "fallback_provider": "openai",
+      "system_template": "You are drafting an email reply. The conversation context follows. Write a professional, courteous reply. Use appropriate salutation and closing. Keep paragraphs short (2-3 sentences). Sign with 'Best regards' unless instructed otherwise.",
+      "user_template": "Email context:\n{{selection.text}}\n\nDraft a reply to: {{user_input}}",
+      "temperature": 0.3,
+      "max_tokens": 1024
+    },
+    "/summarize": {
+      "pipeline": "cot",
+      "provider": "anthropic",
+      "system_template": "Summarize the following email thread. Extract:\n1. Sender and recipient names\n2. Main topic and purpose\n3. Key points from each message\n4. Action items or next steps\n5. Deadline dates mentioned\n\nOutput as a concise bullet list.",
+      "user_template": "{{selection.text}}",
+      "temperature": 0.2,
+      "max_tokens": 1024
+    },
+    "/formalize": {
+      "pipeline": "cot",
+      "provider": "local",
+      "system_template": "Rewrite the following draft with professional, polished language suitable for business correspondence. Use formal salutations, complete sentences, and appropriate closings. Maintain the core message and intent.",
+      "user_template": "{{user_input}}",
+      "temperature": 0.3,
+      "max_tokens": 1024
+    },
+    "/fix": {
+      "pipeline": "cot",
+      "provider": "local",
+      "system_template": "Proofread the following email draft. Fix: grammar, spelling, punctuation, awkward phrasing, overly casual language. Preserve the sender's voice and all technical terms. Output the corrected version only.",
+      "user_template": "{{selection.text}}\n\n---\n\n{{user_input}}",
+      "temperature": 0.1,
+      "max_tokens": 1024
+    },
+    "/draft": {
+      "pipeline": "cot",
+      "provider": "openai",
+      "system_template": "Draft a professional email based on the user's instructions. Follow these rules:\n1. Clear subject line (bracketed)\n2. Professional greeting\n3. Concise body with clear purpose\n4. Appropriate closing\n5. Do not use placeholders — write full content.\n\nIf the user specifies a recipient, tone, or template, incorporate those requests.",
+      "user_template": "Draft an email: {{user_input}}",
+      "temperature": 0.4,
+      "max_tokens": 1536
+    }
+  }
+}

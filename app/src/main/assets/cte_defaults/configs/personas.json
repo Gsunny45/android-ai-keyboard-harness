@@ -1,0 +1,33 @@
+{
+  "professional": {
+    "tone": "formal",
+    "avoid": ["slang", "emoji", "filler"]
+  },
+  "technical": {
+    "tone": "precise",
+    "avoid": ["hedging", "marketing language"]
+  },
+  "casual": {
+    "tone": "conversational",
+    "avoid": ["jargon"]
+  },
+  "terse": {
+    "tone": "minimal",
+    "avoid": ["preamble", "postamble", "apologies"]
+  },
+  "obsidian_writer": {
+    "tone": "technical",
+    "avoid": ["hedging"],
+    "context_layers": {
+      "vault": { "name": "{{vault.name}}", "path": "{{vault.path}}" },
+      "file":  { "path": "{{file.path}}", "tags": "{{file.tags|none}}" }
+    }
+  },
+  "code_reviewer": {
+    "tone": "precise",
+    "avoid": ["compliments", "hedging"],
+    "context_layers": {
+      "code": { "selection": "{{selection.text}}" }
+    }
+  }
+}

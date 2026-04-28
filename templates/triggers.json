@@ -1,7 +1,59 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": 2,
   "defaultModel": "qwen2.5-coder-1.5b-uncensored",
   "defaultEndpoint": "http://127.0.0.1:8080/v1/chat/completions",
+  "providers": {
+    "local": {
+      "url": "http://127.0.0.1:8080/v1/chat/completions",
+      "model": "gemma-3n-e2b",
+      "priority": 1,
+      "maxTokens": 2048,
+      "timeoutMs": 30000
+    },
+    "anthropic": {
+      "url": "https://api.anthropic.com/v1/messages",
+      "model": "claude-haiku-4-5-20251001",
+      "keyRef": "ANTHROPIC_KEY",
+      "priority": 2
+    },
+    "openai": {
+      "url": "https://api.openai.com/v1/chat/completions",
+      "model": "gpt-4o-mini",
+      "keyRef": "OPENAI_KEY",
+      "priority": 3
+    },
+    "gemini_1": {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      "keyRef": "GEMINI_KEY_1",
+      "priority": 4
+    },
+    "gemini_2": {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      "keyRef": "GEMINI_KEY_2",
+      "priority": 5
+    },
+    "deepseek": {
+      "url": "https://api.deepseek.com/v1/chat/completions",
+      "model": "deepseek-chat",
+      "keyRef": "DEEPSEEK_KEY",
+      "priority": 6
+    }
+  },
+  "routing": {
+    "default": "local",
+    "rules": [
+      { "if": "trigger.pipeline == 'tot'", "use": "anthropic" },
+      { "if": "trigger.maxTokens > 1024", "use": "anthropic" },
+      { "if": "provider.local.unreachable", "use": "gemini_1" },
+      { "if": "provider.gemini_1.rateLimited", "use": "gemini_2" },
+      { "if": "trigger.budget == 'cheap'", "use": "deepseek" }
+    ]
+  },
+  "context_layers_global": {
+    "time": { "now": "{{system.time.iso}}", "tz": "{{system.tz}}" },
+    "clipboard": { "text": "{{system.clipboard}}" },
+    "selection": { "text": "{{system.selection}}" }
+  },
   "triggers": {
     "/formal": {
       "pipeline": "cot",
@@ -53,6 +105,19 @@
       "system": "You are a meta-skill builder. Given the user's task description, generate a new JSON skill config with: id, name, trigger, system prompt, pipeline (cot or tot), temperature, and max_tokens. Output valid JSON only.",
       "temperature": 0.7,
       "max_tokens": 1024
+    },
+    "/voice": {
+      "pipeline": "cot",
+      "provider": "local",
+      "system_template": "{{user_input}}",
+      "user_template": "",
+      "temperature": 0.3,
+      "max_tokens": 2048,
+      "skill_routing": {
+        "app": "md.obsidian",
+        "skill": "vault_aware_draft",
+        "description": "Voice transcript auto-routed to vault_aware_draft skill when in Obsidian"
+      }
     }
   },
   "personas": {
@@ -72,5 +137,12 @@
       "vocabulary": "domain-specific",
       "contractions": false
     }
-  }
+  },
+  "appProfiles": {
+    "md.obsidian": { "extends": "templates/obsidian.triggers.json" },
+    "com.whatsapp": { "extends": "templates/whatsapp.triggers.json" },
+    "com.google.android.gm": { "extends": "templates/gmail.triggers.json" },
+    "*": { "basePersona": "professional" }
+  },
+  "skills": {}
 }

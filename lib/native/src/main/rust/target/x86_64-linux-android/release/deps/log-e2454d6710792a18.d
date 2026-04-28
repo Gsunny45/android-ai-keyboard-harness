@@ -1,0 +1,10 @@
+C:\Users\MarsBase\Documents\android-ai-keyboard-harness\lib\native\src\main\rust\target\x86_64-linux-android\release\deps\log-e2454d6710792a18.d: C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\lib.rs C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\macros.rs C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\serde.rs C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\__private_api.rs
+
+C:\Users\MarsBase\Documents\android-ai-keyboard-harness\lib\native\src\main\rust\target\x86_64-linux-android\release\deps\liblog-e2454d6710792a18.rlib: C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\lib.rs C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\macros.rs C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\serde.rs C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\__private_api.rs
+
+C:\Users\MarsBase\Documents\android-ai-keyboard-harness\lib\native\src\main\rust\target\x86_64-linux-android\release\deps\liblog-e2454d6710792a18.rmeta: C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\lib.rs C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\macros.rs C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\serde.rs C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\__private_api.rs
+
+C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\lib.rs:
+C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\macros.rs:
+C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\serde.rs:
+C:\Users\MarsBase\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\log-0.4.22\src\__private_api.rs:

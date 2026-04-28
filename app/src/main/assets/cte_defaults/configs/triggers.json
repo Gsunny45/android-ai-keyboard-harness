@@ -1,0 +1,186 @@
+{
+  "$schema": "./triggers.schema.json",
+  "schemaVersion": 2,
+  "defaultEndpoint": "http://127.0.0.1:8080/v1/chat/completions",
+
+  "providers": {
+    "local": {
+      "url": "http://127.0.0.1:8080/v1/chat/completions",
+      "model": "gemma-3n-e2b",
+      "priority": 1,
+      "maxTokens": 2048,
+      "timeoutMs": 30000,
+      "dailyTokenCap": 0
+    },
+    "anthropic": {
+      "url": "https://api.anthropic.com/v1/messages",
+      "model": "claude-haiku-4-5-20251001",
+      "keyRef": "ANTHROPIC_KEY",
+      "priority": 2,
+      "maxTokens": 4096,
+      "timeoutMs": 30000,
+      "dailyTokenCap": 200000
+    },
+    "openai": {
+      "url": "https://api.openai.com/v1/chat/completions",
+      "model": "gpt-4o-mini",
+      "keyRef": "OPENAI_KEY",
+      "priority": 3,
+      "maxTokens": 4096,
+      "timeoutMs": 30000,
+      "dailyTokenCap": 100000
+    },
+    "gemini_1": {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      "model": "gemini-2.0-flash",
+      "keyRef": "GEMINI_KEY_1",
+      "priority": 4,
+      "maxTokens": 4096,
+      "timeoutMs": 30000,
+      "dailyTokenCap": 1000000
+    },
+    "gemini_2": {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      "model": "gemini-2.0-flash",
+      "keyRef": "GEMINI_KEY_2",
+      "priority": 5,
+      "maxTokens": 4096,
+      "timeoutMs": 30000,
+      "dailyTokenCap": 1000000
+    },
+    "deepseek": {
+      "url": "https://api.deepseek.com/v1/chat/completions",
+      "model": "deepseek-chat",
+      "keyRef": "DEEPSEEK_KEY",
+      "priority": 6,
+      "maxTokens": 4096,
+      "timeoutMs": 30000,
+      "dailyTokenCap": 500000
+    }
+  },
+
+  "context_layers_global": {
+    "time":      { "now": "{{system.time.iso}}", "tz": "{{system.tz}}" },
+    "clipboard": { "text": "{{system.clipboard}}" },
+    "selection": { "text": "{{system.selection}}" }
+  },
+
+  "personas": {
+    "professional": {
+      "tone": "formal",
+      "avoid": ["slang", "emoji", "filler"]
+    },
+    "technical": {
+      "tone": "precise",
+      "avoid": ["hedging", "marketing language"]
+    },
+    "casual": {
+      "tone": "conversational",
+      "avoid": ["jargon"]
+    },
+    "obsidian_writer": {
+      "tone": "technical",
+      "avoid": ["hedging"],
+      "context_layers": {
+        "vault": { "name": "{{vault.name}}", "path": "{{vault.path}}" },
+        "file":  { "path": "{{file.path}}", "tags": "{{file.tags|none}}" }
+      }
+    }
+  },
+
+  "triggers": {
+    "/formal": {
+      "pipeline": "single",
+      "provider": "local",
+      "fallback_provider": "gemini_1",
+      "system_template": "Rewrite the user's text in a formal, professional tone. Preserve meaning. Return only the rewritten text.",
+      "user_template": "{{user_input}}",
+      "max_tokens": 512,
+      "output_mode": "inline",
+      "budget": "cheap"
+    },
+    "/casual": {
+      "pipeline": "single",
+      "provider": "local",
+      "fallback_provider": "gemini_1",
+      "system_template": "Rewrite the user's text in a casual, friendly tone. Preserve meaning. Return only the rewritten text.",
+      "user_template": "{{user_input}}",
+      "max_tokens": 512,
+      "output_mode": "inline",
+      "budget": "cheap"
+    },
+    "/fix": {
+      "pipeline": "single",
+      "provider": "local",
+      "fallback_provider": "gemini_1",
+      "system_template": "Fix grammar and spelling errors in the user's text. Preserve meaning, voice, markdown, and any wikilinks. Return only the corrected text.",
+      "user_template": "{{selection.text|user_input}}",
+      "max_tokens": 512,
+      "output_mode": "inline",
+      "budget": "cheap"
+    },
+    "/summarize": {
+      "pipeline": "single",
+      "provider": "local",
+      "fallback_provider": "anthropic",
+      "system_template": "Summarize the following in 3 bullet points. Be concrete.",
+      "user_template": "{{selection.text|clipboard.text|user_input}}",
+      "max_tokens": 256,
+      "output_mode": "overlay"
+    },
+    "<<cot>>": {
+      "pipeline": "cot",
+      "provider": "anthropic",
+      "fallback_provider": "gemini_1",
+      "system_template": "Think step-by-step. End your answer with a line beginning with FINAL: that contains only the final answer.",
+      "user_template": "{{user_input}}",
+      "max_tokens": 1024,
+      "extract_pattern": "FINAL:\\s*(.*)",
+      "output_mode": "overlay"
+    },
+    "<<tot>>": {
+      "pipeline": "tot",
+      "provider": "anthropic",
+      "branches": 3,
+      "system_template": "Generate 3 distinct approaches to: {{user_input}}. Score each 1-10 on novelty, feasibility, and fit. Return the top one as FINAL: ...",
+      "user_template": "{{user_input}}",
+      "max_tokens": 1500,
+      "extract_pattern": "FINAL:\\s*(.*)",
+      "output_mode": "strip"
+    },
+    "/meta": {
+      "pipeline": "tot",
+      "provider": "anthropic",
+      "system_template": "You are a meta-skill builder. Build skills that layer context like Obsidian Templater:\n1. Start with base persona (professional|technical).\n2. Inject file-level context (app name, selection, vault path).\n3. Build multi-step reasoning (CoT layers).\n4. Output as new skill JSON, valid for skills.json.",
+      "user_template": "{{user_input}}",
+      "max_tokens": 2048,
+      "output_mode": "overlay"
+    },
+    "/skill": {
+      "pipeline": "skill",
+      "system_template": "",
+      "user_template": "{{user_input}}",
+      "output_mode": "overlay"
+    },
+    "/chain": {
+      "pipeline": "chain",
+      "system_template": "",
+      "user_template": "{{user_input}}",
+      "output_mode": "overlay"
+    },
+    "/voice": {
+      "pipeline": "skill",
+      "skill": "vault_aware_draft",
+      "system_template": "",
+      "user_template": "{{user_input}}",
+      "output_mode": "inline"
+    }
+  },
+
+  "appProfiles": {
+    "md.obsidian":           { "extends": "profiles/obsidian.triggers.json" },
+    "com.google.android.gm": { "extends": "profiles/gmail.triggers.json" },
+    "com.whatsapp":          { "extends": "profiles/whatsapp.triggers.json" },
+    "*":                     { "extends": "profiles/_wildcard.triggers.json" }
+  }
+}

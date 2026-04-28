@@ -1,0 +1,1 @@
+C:\Users\MarsBase\Documents\android-ai-keyboard-harness\lib\native\src\main\rust\target\i686-linux-android\release\libfl_native_rust.a: C:\Users\MarsBase\Documents\android-ai-keyboard-harness\lib\native\src\main\rust\src\lib.rs C:\Users\MarsBase\Documents\android-ai-keyboard-harness\libnative\dummy\src\lib.rs

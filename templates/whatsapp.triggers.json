@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "basePersona": "casual",
+  "context_source": "app_window",
+  "triggers": {
+    "/reply": {
+      "pipeline": "cot",
+      "provider": "local",
+      "system_template": "Generate a casual, friendly reply to the following message. Keep it short (2-3 sentences). Use natural conversational tone. The sender is from {{app.name}}.",
+      "user_template": "Draft a reply to: {{user_input}}",
+      "temperature": 0.5,
+      "max_tokens": 256
+    },
+    "/formalize": {
+      "pipeline": "cot",
+      "provider": "local",
+      "system_template": "Rewrite the following text in a formal, polite tone suitable for a professional WhatsApp conversation. Keep the core message intact. Remove slang, shorten exclamations, and add polite framing.",
+      "user_template": "{{user_input}}",
+      "temperature": 0.3,
+      "max_tokens": 512
+    },
+    "/shorten": {
+      "pipeline": "cot",
+      "provider": "local",
+      "system_template": "Condense the following message to 1-2 sentences while preserving all key information. Be direct. Remove pleasantries.",
+      "user_template": "{{user_input}}",
+      "temperature": 0.2,
+      "max_tokens": 256
+    },
+    "/translate": {
+      "pipeline": "cot",
+      "provider": "deepseek",
+      "system_template": "Detect the language of the following text and translate it to {{user.preferred_tone|english}}. Preserve the tone (formal/casual) of the original. Output only the translation, no explanations.",
+      "user_template": "{{user_input}}",
+      "temperature": 0.1,
+      "max_tokens": 1024
+    },
+    "/fix": {
+      "pipeline": "cot",
+      "provider": "local",
+      "system_template": "Fix grammar, spelling, and punctuation in the following text. Preserve the conversational tone. Do not change slang or abbreviations used deliberately.",
+      "user_template": "{{user_input}}",
+      "temperature": 0.1,
+      "max_tokens": 512
+    }
+  }
+}

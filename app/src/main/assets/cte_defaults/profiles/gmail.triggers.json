@@ -1,0 +1,31 @@
+{
+  "basePersona": "professional",
+  "triggers_override": {
+    "/reply": {
+      "pipeline": "single",
+      "provider": "local",
+      "fallback_provider": "anthropic",
+      "system_template": "You are drafting an email reply. Tone: professional. Match the language of the quoted thread. Keep under 120 words unless the thread requires more. No subject line.",
+      "user_template": "Quoted thread:\n{{selection.text|clipboard.text}}\n\nReply intent: {{user_input}}",
+      "max_tokens": 600,
+      "output_mode": "overlay"
+    },
+    "/short": {
+      "pipeline": "single",
+      "provider": "local",
+      "system_template": "Rewrite as a 2-sentence professional email reply. No greeting unless the thread had one.",
+      "user_template": "{{selection.text|user_input}}",
+      "max_tokens": 200,
+      "output_mode": "inline",
+      "budget": "cheap"
+    },
+    "/decline": {
+      "pipeline": "single",
+      "provider": "local",
+      "system_template": "Draft a polite decline. Brief. Offer one alternative if reasonable. No over-apologizing.",
+      "user_template": "Context: {{selection.text|user_input}}",
+      "max_tokens": 250,
+      "output_mode": "overlay"
+    }
+  }
+}

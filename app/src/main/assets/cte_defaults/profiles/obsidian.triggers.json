@@ -1,0 +1,55 @@
+{
+  "basePersona": "obsidian_writer",
+  "context_source": "obsidian_vault_property",
+  "triggers_override": {
+    "/doc": {
+      "pipeline": "cot",
+      "provider": "local",
+      "fallback_provider": "anthropic",
+      "system_template": "You are writing inside Obsidian vault '{{vault.name}}'.\nActive note: {{file.path}}\nTags: {{#each file.tags}}#{{this}} {{/each}}\nWrite documentation that matches the vault's existing style. Use [[wikilinks]] for cross-references. Keep frontmatter intact. End with FINAL: <text>.",
+      "user_template": "{{user_input}}",
+      "max_tokens": 2048,
+      "extract_pattern": "FINAL:\\s*(.*)",
+      "output_mode": "overlay"
+    },
+    "/atomic": {
+      "pipeline": "skill",
+      "skill": "atomic_note",
+      "user_template": "{{selection.text|user_input}}",
+      "output_mode": "overlay"
+    },
+    "/moc": {
+      "pipeline": "skill",
+      "skill": "moc_builder",
+      "user_template": "{{user_input}}",
+      "output_mode": "overlay"
+    },
+    "/link": {
+      "pipeline": "single",
+      "provider": "local",
+      "fallback_provider": "gemini_1",
+      "system_template": "Insert [[wikilinks]] around entity names in the user's text where the entity likely has a corresponding note in vault '{{vault.name}}'. Do not invent entities. Return only the linked text.",
+      "user_template": "{{selection.text|user_input}}",
+      "max_tokens": 512,
+      "output_mode": "inline"
+    },
+    "/daily": {
+      "pipeline": "single",
+      "provider": "local",
+      "fallback_provider": "anthropic",
+      "system_template": "Generate a daily-note opener for {{system.time.iso}} in vault '{{vault.name}}'. Include: 3 priorities, 1 reflection prompt, 1 carryover from yesterday placeholder. Markdown only.",
+      "user_template": "{{user_input}}",
+      "max_tokens": 600,
+      "output_mode": "inline"
+    },
+    "/summarize": {
+      "pipeline": "single",
+      "provider": "local",
+      "fallback_provider": "anthropic",
+      "system_template": "Summarize the active note '{{file.path}}' content in 5 bullet points. Preserve any [[wikilinks]] mentioned.",
+      "user_template": "{{selection.text|clipboard.text|user_input}}",
+      "max_tokens": 400,
+      "output_mode": "overlay"
+    }
+  }
+}

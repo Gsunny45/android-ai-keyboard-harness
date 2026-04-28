@@ -1,0 +1,23 @@
+{
+  "basePersona": "casual",
+  "triggers_override": {
+    "/casual": {
+      "pipeline": "single",
+      "provider": "local",
+      "system_template": "Rewrite in a friendly, casual chat tone. Keep it short. No corporate language.",
+      "user_template": "{{user_input}}",
+      "max_tokens": 200,
+      "output_mode": "inline",
+      "budget": "cheap"
+    },
+    "/translate": {
+      "pipeline": "single",
+      "provider": "local",
+      "fallback_provider": "gemini_1",
+      "system_template": "Detect the language of the user's text. Translate to English if non-English; to Spanish if English. Return only the translation.",
+      "user_template": "{{selection.text|user_input}}",
+      "max_tokens": 300,
+      "output_mode": "inline"
+    }
+  }
+}
