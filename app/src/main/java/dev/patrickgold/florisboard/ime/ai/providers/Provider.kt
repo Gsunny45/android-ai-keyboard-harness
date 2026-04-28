@@ -81,8 +81,37 @@ interface Provider {
 }
 
 /**
+ * Provider role controls when a provider is eligible for selection.
+ *
+ * - [PRIMARY]  : normal routing, used for everyday triggers
+ * - [FALLBACK] : only selected when all primary providers are unreachable/rate-limited
+ * - [FINISHER] : only selected for high-cost pipelines (ToT) or high-token requests (>1024);
+ *                never used for broad testing / short single-shot triggers
+ */
+enum class ProviderRole {
+    PRIMARY, FALLBACK, FINISHER;
+
+    companion object {
+        fun from(s: String): ProviderRole = when (s.lowercase()) {
+            "primary"  -> PRIMARY
+            "fallback" -> FALLBACK
+            "finisher" -> FINISHER
+            else       -> PRIMARY   // default: treat unknown roles as primary
+        }
+    }
+}
+
+/**
  * Provider configuration as defined in triggers.json "providers" section.
  * Not all fields apply to every provider (e.g. local has no keyRef).
+ *
+ * [enabled] is a master on/off toggle — false means the router skips this
+ * provider entirely, regardless of health or key presence.
+ *
+ * [role] controls eligibility:
+ *   PRIMARY  → normal routing (default)
+ *   FALLBACK → only when all primaries are down
+ *   FINISHER → only for ToT pipeline or maxTokens > 1024
  */
 @Serializable
 data class ProviderConfig(
@@ -92,4 +121,9 @@ data class ProviderConfig(
     val priority: Int = 10,
     val maxTokens: Int = 2048,
     val timeoutMs: Long = 30_000L,
-)
+    val enabled: Boolean = true,
+    val role: String = "primary",
+) {
+    /** Parsed role enum — use this instead of the raw [role] string. */
+    val providerRole: ProviderRole get() = ProviderRole.from(role)
+}

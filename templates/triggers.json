@@ -8,35 +8,47 @@
       "model": "gemma-3n-e2b",
       "priority": 1,
       "maxTokens": 2048,
-      "timeoutMs": 30000
+      "timeoutMs": 30000,
+      "enabled": true,
+      "role": "primary"
     },
     "anthropic": {
       "url": "https://api.anthropic.com/v1/messages",
       "model": "claude-haiku-4-5-20251001",
       "keyRef": "ANTHROPIC_KEY",
-      "priority": 2
+      "priority": 2,
+      "enabled": true,
+      "role": "finisher"
     },
     "openai": {
       "url": "https://api.openai.com/v1/chat/completions",
       "model": "gpt-4o-mini",
       "keyRef": "OPENAI_KEY",
-      "priority": 3
+      "priority": 3,
+      "enabled": false,
+      "role": "finisher"
     },
     "gemini_1": {
       "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
       "keyRef": "GEMINI_KEY_1",
-      "priority": 4
+      "priority": 4,
+      "enabled": true,
+      "role": "fallback"
     },
     "gemini_2": {
       "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
       "keyRef": "GEMINI_KEY_2",
-      "priority": 5
+      "priority": 5,
+      "enabled": true,
+      "role": "fallback"
     },
     "deepseek": {
       "url": "https://api.deepseek.com/v1/chat/completions",
       "model": "deepseek-chat",
       "keyRef": "DEEPSEEK_KEY",
-      "priority": 6
+      "priority": 6,
+      "enabled": false,
+      "role": "primary"
     }
   },
   "routing": {

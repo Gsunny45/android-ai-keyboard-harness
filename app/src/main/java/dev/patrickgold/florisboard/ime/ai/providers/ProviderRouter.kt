@@ -17,10 +17,11 @@ import kotlinx.coroutines.flow.flow
  *   5. If fallback also fails, iterate priority-sorted providers
  *   6. If all providers fail, emit [Token] with FinishReason.ERROR
  *
- * Key-aware routing:
- *   - Providers with a keyRef but no stored key are treated as disabled.
- *   - At each fallback step, the router checks KeyVault before executing.
- *   - Disabled providers log a warning and are skipped silently.
+ * Toggle / role-aware routing:
+ *   - [ProviderConfig.enabled] = false → provider is completely skipped.
+ *   - [ProviderRole.FINISHER]  → only selected for ToT pipeline or maxTokens > 1024.
+ *   - [ProviderRole.FALLBACK]  → only selected after all PRIMARY providers fail.
+ *   - Providers with a keyRef but no stored key are also skipped.
  */
 class ProviderRouter(
     private val providers: Map<String, Provider>,
@@ -79,6 +80,37 @@ class ProviderRouter(
         }
     }
 
+    // ── Toggle / role checks ─────────────────────────────────────────────
+
+    /**
+     * Returns true if the provider's master [ProviderConfig.enabled] flag is on.
+     * This is the first gate — a disabled provider is skipped before any other check.
+     */
+    private fun providerIsEnabled(providerId: String): Boolean {
+        val cfg = providers[providerId]?.config ?: return false
+        if (!cfg.enabled) {
+            Log.d(TAG, "Provider $providerId skipped — enabled=false")
+        }
+        return cfg.enabled
+    }
+
+    /**
+     * Returns true if [providerId] is eligible given the current [prompt].
+     *
+     * Role rules:
+     *   FINISHER → only allowed when pipeline == "tot" OR maxTokens > 1024
+     *   FALLBACK → deferred; not eligible in the primary selection pass
+     *   PRIMARY  → always eligible (subject to health + key checks)
+     */
+    private fun providerRoleAllows(providerId: String, prompt: ResolvedPrompt): Boolean {
+        val role = providers[providerId]?.config?.providerRole ?: return true
+        return when (role) {
+            ProviderRole.FINISHER -> prompt.pipeline == "tot" || prompt.maxTokens > 1024
+            ProviderRole.FALLBACK -> false  // handled separately in fallback pass
+            ProviderRole.PRIMARY  -> true
+        }
+    }
+
     // ── Key availability check ────────────────────────────────────────────
 
     /**
@@ -91,7 +123,7 @@ class ProviderRouter(
         val keyRef = provider.config.keyRef ?: return true // no keyRef = no key needed
         val hasKey = keyVault.get(keyRef) != null
         if (!hasKey) {
-            Log.w(TAG, "Provider $providerId disabled — no key stored for keyRef=$keyRef")
+            Log.w(TAG, "Provider $providerId skipped — no key stored for keyRef=$keyRef")
         }
         return hasKey
     }
@@ -99,18 +131,31 @@ class ProviderRouter(
     // ── Provider selection ───────────────────────────────────────────────
 
     private fun selectProviderId(prompt: ResolvedPrompt): String {
-        // Helper: provider must exist, be healthy, AND have its API key
+        // Full eligibility gate: enabled + correct role for this prompt + healthy + has key
         fun isAvailable(id: String): Boolean =
-            id in providers && healthTracker.isHealthy(id) && providerHasApiKey(id)
+            providerIsEnabled(id) &&
+            providerRoleAllows(id, prompt) &&
+            healthTracker.isHealthy(id) &&
+            providerHasApiKey(id)
 
-        // 1. Explicit preference from trigger
-        if (prompt.preferredProvider != null && isAvailable(prompt.preferredProvider)) {
-            return prompt.preferredProvider
+        // Fallback-role eligibility (used only in the final fallback pass)
+        fun isFallbackAvailable(id: String): Boolean =
+            providerIsEnabled(id) &&
+            providers[id]?.config?.providerRole == ProviderRole.FALLBACK &&
+            healthTracker.isHealthy(id) &&
+            providerHasApiKey(id)
+
+        // 1. Explicit preference from trigger (bypass role check — caller knows what they want)
+        if (prompt.preferredProvider != null) {
+            val id = prompt.preferredProvider
+            if (providerIsEnabled(id) && healthTracker.isHealthy(id) && providerHasApiKey(id)) {
+                return id
+            }
         }
 
         // 2. Budget-based override
         val budgetMap = mapOf(
-            "cheap" to listOf("deepseek", "local", "gemini_1"),
+            "cheap"   to listOf("deepseek", "local", "gemini_1"),
             "balanced" to null, // use normal routing
             "premium" to listOf("anthropic", "openai"),
         )
@@ -121,7 +166,7 @@ class ProviderRouter(
             }
         }
 
-        // 3. Evaluate routing rules in order
+        // 3. Evaluate routing rules in order (role gate still applies)
         val context = RuleContext(
             triggerPipeline = prompt.pipeline,
             triggerMaxTokens = prompt.maxTokens,
@@ -144,14 +189,21 @@ class ProviderRouter(
         // 4. Default provider
         if (isAvailable(routingConfig.default)) return routingConfig.default
 
-        // 5. First available provider by priority (healthy + has key)
-        return routingConfig.providers
+        // 5. First available PRIMARY/FINISHER provider by priority
+        val byPriority = routingConfig.providers
             .entries
             .sortedBy { it.value.priority }
-            .firstOrNull { isAvailable(it.key) }
-            ?.key
-            ?: routingConfig.providers.keys.firstOrNull()
-            ?: "local"
+            .map { it.key }
+
+        byPriority.firstOrNull { isAvailable(it) }?.let { return it }
+
+        // 6. Last resort — try FALLBACK-role providers (all primaries exhausted)
+        byPriority.firstOrNull { isFallbackAvailable(it) }?.let {
+            Log.i(TAG, "All primary providers exhausted — trying fallback provider: $it")
+            return it
+        }
+
+        return routingConfig.providers.keys.firstOrNull() ?: "local"
     }
 
     // ── Fallback execution ───────────────────────────────────────────────
@@ -181,7 +233,7 @@ class ProviderRouter(
             }
         }
 
-        // Try any remaining healthy provider by priority
+        // Try any remaining healthy provider by priority (respect enabled + role)
         val priorityOrder = routingConfig.providers
             .entries
             .sortedBy { it.value.priority }
@@ -190,8 +242,12 @@ class ProviderRouter(
         for (providerId in priorityOrder) {
             if (providerId == primaryId || providerId == prompt.fallbackProvider) continue
             if (providerId !in providers) continue
+            if (!providerIsEnabled(providerId)) continue
             if (!healthTracker.isHealthy(providerId)) continue
             if (!providerHasApiKey(providerId)) continue
+            // FINISHER-role providers: only include if prompt warrants it
+            val role = providers[providerId]?.config?.providerRole
+            if (role == ProviderRole.FINISHER && prompt.pipeline != "tot" && prompt.maxTokens <= 1024) continue
 
             val candidate = providers[providerId]!!
             val candidateResult = executeProvider(candidate, request, providerId)
