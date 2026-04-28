@@ -42,11 +42,71 @@
       "enabled": true,
       "role": "fallback"
     },
+    "groq": {
+      "url": "https://api.groq.com/openai/v1/chat/completions",
+      "model": "gemma2-9b-it",
+      "keyRef": "GROQ_KEY",
+      "priority": 2,
+      "maxTokens": 1024,
+      "timeoutMs": 15000,
+      "enabled": true,
+      "role": "primary"
+    },
+    "cerebras": {
+      "url": "https://api.cerebras.ai/v1/chat/completions",
+      "model": "llama-3.3-70b",
+      "keyRef": "CEREBRAS_KEY",
+      "priority": 3,
+      "maxTokens": 1024,
+      "timeoutMs": 20000,
+      "enabled": true,
+      "role": "primary"
+    },
+    "anthropic": {
+      "url": "https://api.anthropic.com/v1/messages",
+      "model": "claude-haiku-4-5-20251001",
+      "keyRef": "ANTHROPIC_KEY",
+      "priority": 4,
+      "enabled": true,
+      "role": "finisher"
+    },
+    "openai": {
+      "url": "https://api.openai.com/v1/chat/completions",
+      "model": "gpt-4o-mini",
+      "keyRef": "OPENAI_KEY",
+      "priority": 5,
+      "enabled": false,
+      "role": "finisher"
+    },
+    "gemini_1": {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      "keyRef": "GEMINI_KEY_1",
+      "priority": 6,
+      "enabled": true,
+      "role": "fallback"
+    },
+    "gemini_2": {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      "keyRef": "GEMINI_KEY_2",
+      "priority": 7,
+      "enabled": true,
+      "role": "fallback"
+    },
+    "openrouter": {
+      "url": "https://openrouter.ai/api/v1/chat/completions",
+      "model": "meta-llama/llama-3.3-70b-instruct:free",
+      "keyRef": "OPENROUTER_KEY",
+      "priority": 8,
+      "maxTokens": 1024,
+      "timeoutMs": 30000,
+      "enabled": false,
+      "role": "fallback"
+    },
     "deepseek": {
       "url": "https://api.deepseek.com/v1/chat/completions",
       "model": "deepseek-chat",
       "keyRef": "DEEPSEEK_KEY",
-      "priority": 6,
+      "priority": 9,
       "enabled": false,
       "role": "primary"
     }
@@ -56,9 +116,11 @@
     "rules": [
       { "if": "trigger.pipeline == 'tot'", "use": "anthropic" },
       { "if": "trigger.maxTokens > 1024", "use": "anthropic" },
-      { "if": "provider.local.unreachable", "use": "gemini_1" },
+      { "if": "provider.local.unreachable", "use": "groq" },
+      { "if": "provider.groq.rateLimited", "use": "cerebras" },
+      { "if": "provider.cerebras.rateLimited", "use": "gemini_1" },
       { "if": "provider.gemini_1.rateLimited", "use": "gemini_2" },
-      { "if": "trigger.budget == 'cheap'", "use": "deepseek" }
+      { "if": "trigger.budget == 'cheap'", "use": "groq" }
     ]
   },
   "context_layers_global": {
