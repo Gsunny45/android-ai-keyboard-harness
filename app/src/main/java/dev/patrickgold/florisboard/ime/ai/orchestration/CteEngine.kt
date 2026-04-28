@@ -41,7 +41,10 @@ class CteEngine(
     // ── Lazy pipeline components (initialized on first trigger) ──────────
 
     private val configStore = TriggerConfigStore.getInstance(context)
-    private val keyVault = KeyVault.getInstance(context)
+
+    // KeyVault is accessed lazily — getInstance() is safe at any time but
+    // actual prefs reads are deferred until device is unlocked (see KeyVault).
+    private val keyVault by lazy { KeyVault.getInstance(context) }
 
     private var pipeline: CtePipeline? = null
 
@@ -325,40 +328,50 @@ class CteEngine(
             for ((providerId, providerValue) in providersObj) {
                 val obj = providerValue.jsonObject
                 val config = ProviderConfig(
-                    url = obj["url"]?.jsonPrimitive?.content ?: "",
-                    model = obj["model"]?.jsonPrimitive?.content,
-                    keyRef = obj["keyRef"]?.jsonPrimitive?.content,
+                    url      = obj["url"]?.jsonPrimitive?.content ?: "",
+                    model    = obj["model"]?.jsonPrimitive?.content,
+                    keyRef   = obj["keyRef"]?.jsonPrimitive?.content,
                     priority = obj["priority"]?.jsonPrimitive?.int ?: 10,
                     maxTokens = obj["maxTokens"]?.jsonPrimitive?.int ?: 2048,
                     timeoutMs = obj["timeoutMs"]?.jsonPrimitive?.long ?: 30_000L,
+                    enabled  = obj["enabled"]?.jsonPrimitive?.booleanOrNull ?: true,
+                    role     = obj["role"]?.jsonPrimitive?.content ?: "primary",
                 )
                 providerConfigMap[providerId] = config
+
+                // Skip disabled providers entirely
+                if (!config.enabled) {
+                    Log.d(TAG, "Provider $providerId skipped (enabled=false)")
+                    continue
+                }
 
                 // Create provider instance if API key is available (or no key needed)
                 val apiKey = config.keyRef?.let { keyVault.get(it) }
 
-                val provider: Provider? = when {
-                    providerId == "local" -> LlamaCppLocal(config)
-                    providerId.startsWith("gemini") -> {
-                        if (apiKey != null) GeminiProvider(config, apiKey) else null
-                    }
-                    providerId == "anthropic" -> {
-                        if (apiKey != null) AnthropicProvider(config, apiKey) else null
-                    }
-                    providerId == "openai" -> {
-                        if (apiKey != null) OpenAIProvider(config, apiKey) else null
-                    }
-                    providerId == "deepseek" -> {
-                        if (apiKey != null) DeepseekProvider(config, apiKey) else null
-                    }
-                    else -> {
-                        Log.w(TAG, "Unknown provider type: $providerId")
-                        null
+                val provider: Provider? = when (providerId) {
+                    "local"      -> LlamaCppLocal(config)
+                    "anthropic"  -> if (apiKey != null) AnthropicProvider(config, apiKey) else null
+                    "openai"     -> if (apiKey != null) OpenAIProvider(config, apiKey) else null
+                    "groq"       -> if (apiKey != null) GroqProvider(config, apiKey) else null
+                    "cerebras"   -> if (apiKey != null) CerebrasProvider(config, apiKey) else null
+                    "openrouter" -> if (apiKey != null) OpenRouterProvider(config, apiKey) else null
+                    "deepseek"   -> if (apiKey != null) DeepseekProvider(config, apiKey) else null
+                    else         -> {
+                        // gemini_1, gemini_2, or future providers
+                        if (providerId.startsWith("gemini") && apiKey != null)
+                            GeminiProvider(config, apiKey)
+                        else {
+                            Log.w(TAG, "Unknown or unconfigured provider: $providerId")
+                            null
+                        }
                     }
                 }
 
                 if (provider != null) {
                     providerInstances[providerId] = provider
+                    Log.d(TAG, "Provider $providerId ready (role=${config.role})")
+                } else if (config.keyRef != null) {
+                    Log.i(TAG, "Provider $providerId skipped — no key set for ${config.keyRef}")
                 }
             }
 
