@@ -3,13 +3,14 @@ package dev.patrickgold.florisboard.ime.ai.output
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Typeface
 import android.text.method.ScrollingMovementMethod
-import android.view.inputmethod.InputConnection
 import android.widget.TextView
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -18,6 +19,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.patrickgold.florisboard.ime.ai.providers.CompletionResult
+import io.noties.markwon.AbstractMarkwonPlugin
+import io.noties.markwon.Markwon
+import io.noties.markwon.core.MarkwonTheme
+import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
+import io.noties.markwon.ext.tables.TablePlugin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -32,7 +38,7 @@ import java.io.File
  * Renders AI output in a full-height bottom-sheet overlay above the keyboard.
  *
  * Features:
- *   - Markdown rendering via Markwon (org.commonmark:commonmark)
+ *   - Markdown rendering via Markwon (io.noties.markwon:core:4.6.2)
  *   - Action buttons: Insert, Copy, Edit-and-Insert, Discard, Save-as-Skill
  *   - Save-as-Skill opens a dialog that writes a new entry to skills.json
  *
@@ -171,24 +177,56 @@ class OverlayRenderer(
     @Composable
     private fun MarkdownContent(text: String) {
         val context = LocalContext.current
+        val colorScheme = MaterialTheme.colorScheme
 
-        // Renders markdown via Markwon (io.noties.markwon:core:4.6.2).
-        // Uses AndroidView interop to embed a scrollable TextView with
-        // full CommonMark support (headings, bold, lists, code blocks, links).
-        //
-        // Gradle dependency to add to app/build.gradle.kts:
-        //   implementation("io.noties.markwon:core:4.6.2")
+        // Resolve Material3 colors to ARGB ints for Markwon's Android View theming
+        val onSurface = colorScheme.onSurface.toArgb()
+        val onSurfaceVariant = colorScheme.onSurfaceVariant.toArgb()
+        val codeBackground = colorScheme.surfaceContainerHighest.toArgb()
+        val linkColor = colorScheme.primary.toArgb()
+
+        // Build Markwon once per composition with current theme colors.
+        // Includes strikethrough and table extensions for richer AI output.
+        val markwon = remember(onSurface, codeBackground, linkColor) {
+            Markwon.builder(context)
+                .usePlugin(StrikethroughPlugin.create())
+                .usePlugin(TablePlugin.create(context))
+                .usePlugin(object : AbstractMarkwonPlugin() {
+                    override fun configureTheme(builder: MarkwonTheme.Builder) {
+                        builder
+                            .codeTextColor(onSurfaceVariant)
+                            .codeBackgroundColor(codeBackground)
+                            .codeBlockTextColor(onSurfaceVariant)
+                            .codeBlockBackgroundColor(codeBackground)
+                            .codeTypeface(Typeface.MONOSPACE)
+                            .codeBlockTypeface(Typeface.MONOSPACE)
+                            .codeTextSize(14)
+                            .codeBlockMargin(16)
+                            .linkColor(linkColor)
+                            .headingBreakHeight(0)
+                            .bulletWidth(8)
+                            .listItemColor(onSurface)
+                            .thematicBreakColor(onSurfaceVariant)
+                    }
+                })
+                .build()
+        }
+
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 TextView(ctx).apply {
                     isVerticalScrollBarEnabled = true
                     movementMethod = ScrollingMovementMethod.getInstance()
+                    setTextColor(onSurface)
+                    textSize = 15f
+                    setPadding(0, 0, 0, 0)
+                    setLineSpacing(4f, 1f)
                 }
             },
             update = { textView ->
-                // Markwon dependency not yet bundled — plain text fallback
-                textView.text = text
+                textView.setTextColor(onSurface)
+                markwon.setMarkdown(textView, text)
             },
         )
     }
@@ -390,9 +428,9 @@ class OverlayRenderer(
     // ── Markdown strip fallback ──────────────────────────────────────────
 
     /**
-     * Simple markdown-to-plaintext fallback.
-     * Used when Markwon is not available. Strips basic formatting
-     * while preserving structure (headings, lists, code blocks).
+     * Simple markdown-to-plaintext converter.
+     * Used for Insert/Copy actions where raw markdown in an EditText
+     * would look cluttered. Strips formatting while preserving structure.
      */
     private fun stripBasicMarkdown(md: String): String {
         return md

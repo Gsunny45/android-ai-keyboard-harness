@@ -36,11 +36,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.lifecycleScope
+import dev.patrickgold.florisboard.FlorisImeService
 import dev.patrickgold.florisboard.ime.ai.orchestration.LlamaServerService
 import dev.patrickgold.florisboard.ime.ai.providers.LlamaCppLocal
 import dev.patrickgold.florisboard.ime.ai.settings.VoiceSettingsActivity
 import dev.patrickgold.florisboard.ime.ai.trigger.TriggerConfigStore
+import dev.patrickgold.florisboard.ime.ai.voice.VoiceInputManager
+import dev.patrickgold.florisboard.ime.ai.voice.VoskState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -65,6 +72,7 @@ class CteSettingsActivity : ComponentActivity() {
         val providers = loadProviders()
 
         setContent {
+            val voskState by VoiceInputManager.sharedVoskState.collectAsState()
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     SettingsScreen(
@@ -75,6 +83,10 @@ class CteSettingsActivity : ComponentActivity() {
                         onOpenVoiceSettings = { startActivity(Intent(this, VoiceSettingsActivity::class.java)) },
                         onStartMonitor = { startMonitor() },
                         onTestConnection = { testLocalConnection() },
+                        voskState = voskState,
+                        onDownloadVosk = {
+                            VoiceInputManager.downloadModel(this@CteSettingsActivity, lifecycleScope)
+                        },
                     )
                 }
             }
@@ -130,7 +142,10 @@ class CteSettingsActivity : ComponentActivity() {
 
     private fun reloadConfig() {
         val store = TriggerConfigStore.getInstance(this)
-        val ok = store.reloadConfig()
+        val storeOk = store.reloadConfig()
+        // Invalidate CteEngine's in-memory caches so it re-reads configs on next trigger
+        val engineOk = FlorisImeService.reloadCteConfig()
+        val ok = storeOk || engineOk  // at least one path succeeded
         val msg = if (ok) "CTE config reloaded" else "Reload failed — check logs"
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
     }
@@ -140,8 +155,29 @@ class CteSettingsActivity : ComponentActivity() {
         Toast.makeText(this, "LLaMA monitor started", Toast.LENGTH_SHORT).show()
     }
 
-    private fun testLocalConnection() {
-        // Caller wraps in coroutine scope
+    private suspend fun testLocalConnection() {
+        withContext(Dispatchers.IO) {
+            try {
+                val url = java.net.URL("http://127.0.0.1:8080/health")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 3000
+                conn.readTimeout = 3000
+                val code = conn.responseCode
+                val body = if (code == 200) conn.inputStream.bufferedReader().readText() else ""
+                conn.disconnect()
+                withContext(Dispatchers.Main) {
+                    if (code == 200) {
+                        Toast.makeText(this@CteSettingsActivity, "LLaMA server OK: $body", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this@CteSettingsActivity, "Server returned HTTP $code", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@CteSettingsActivity, "Connection failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     // ── Data models ───────────────────────────────────────────────────────
@@ -182,6 +218,8 @@ private fun SettingsScreen(
     onOpenVoiceSettings: () -> Unit,
     onStartMonitor: () -> Unit,
     onTestConnection: suspend () -> Unit,
+    voskState: VoskState,
+    onDownloadVosk: () -> Unit,
 ) {
     // Local toggle state mirrors disk — updates optimistically
     val toggleState = remember {
@@ -250,6 +288,53 @@ private fun SettingsScreen(
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onOpenVoiceSettings, modifier = Modifier.width(280.dp)) {
             Text("Voice Trigger Mappings")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // ── Vosk offline STT ──────────────────────────────────────────────
+        Text("Offline Voice (Vosk)", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            "Downloads vosk-model-en-us-0.22-lgraph (~128 MB) to device storage.\n" +
+            "Used as primary STT when no OPENAI_KEY is set. Fully offline.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        when (val s = voskState) {
+            is VoskState.Idle -> {
+                Button(onClick = onDownloadVosk, modifier = Modifier.width(280.dp)) {
+                    Text("Download Vosk Model (~128 MB)")
+                }
+            }
+            is VoskState.Downloading -> {
+                val pct = (s.progress * 100).toInt()
+                Button(onClick = {}, enabled = false, modifier = Modifier.width(280.dp)) {
+                    Text("Downloading… $pct%")
+                }
+            }
+            is VoskState.Ready -> {
+                Text(
+                    "✓ Vosk model ready",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF2E7D32),
+                )
+            }
+            is VoskState.Error -> {
+                Text(
+                    "Download failed: ${s.message}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Button(onClick = onDownloadVosk, modifier = Modifier.width(280.dp)) {
+                    Text("Retry Download")
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))

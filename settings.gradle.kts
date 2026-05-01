@@ -28,6 +28,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven("https://alphacephei.com/maven/")
         // Uncomment the following if testing snapshots from Maven Central
         //maven("https://s01.oss.sonatype.org/content/repositories/snapshots")
     }

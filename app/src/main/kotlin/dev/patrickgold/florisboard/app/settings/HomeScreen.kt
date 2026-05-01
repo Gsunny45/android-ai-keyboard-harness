@@ -16,9 +16,11 @@
 
 package dev.patrickgold.florisboard.app.settings
 
+import android.content.Intent
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Assignment
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Gesture
 import androidx.compose.material.icons.filled.Language
@@ -37,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.LocalNavController
 import dev.patrickgold.florisboard.app.Routes
+import dev.patrickgold.florisboard.ime.ai.CteSettingsActivity
 import dev.patrickgold.florisboard.lib.compose.FlorisErrorCard
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
 import dev.patrickgold.florisboard.lib.compose.FlorisWarningCard
@@ -149,6 +152,11 @@ fun HomeScreen() = FlorisScreen {
             icon = Icons.Default.Extension,
             title = stringRes(R.string.ext__home__title),
             onClick = { navController.navigate(Routes.Ext.Home) },
+        )
+        Preference(
+            icon = Icons.Default.AutoAwesome,
+            title = stringRes(R.string.settings__cte__title),
+            onClick = { context.startActivity(Intent(context, CteSettingsActivity::class.java)) },
         )
         Preference(
             icon = Icons.Outlined.Build,

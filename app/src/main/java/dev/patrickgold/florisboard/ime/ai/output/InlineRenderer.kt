@@ -37,6 +37,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class InlineRenderer(
     private val scope: CoroutineScope,
+    /** Called when streaming is cancelled by user keypress. Receives token count committed so far. */
+    private val onCancelled: ((tokensCommitted: Int) -> Unit)? = null,
 ) {
     // ── State ────────────────────────────────────────────────────────────
 
@@ -49,6 +51,10 @@ class InlineRenderer(
     @Volatile
     var isStreaming: Boolean = false
         private set
+
+    /** Tracks how many tokens were committed during current stream. */
+    @Volatile
+    private var tokensCommitted: Int = 0
 
     // ── Public API ───────────────────────────────────────────────────────
 
@@ -72,6 +78,7 @@ class InlineRenderer(
 
         isStreaming = true
         cancelFlag.set(false)
+        tokensCommitted = 0
 
         currentJob = scope.launch {
             val textBuilder = StringBuilder()
@@ -103,6 +110,7 @@ class InlineRenderer(
                             // Append token text
                             textBuilder.append(token.text)
                             inputConnection.commitText(token.text, 1)
+                            tokensCommitted++
                         }
                     }
                 }
@@ -137,12 +145,15 @@ class InlineRenderer(
         // Any key press cancels the stream — including backspace,
         // letters, numbers, space, enter.
         cancelFlag.set(true)
+        val committed = tokensCommitted
         // Cancel the coroutine job so the finally block runs immediately,
         // which calls endBatchEdit() and prevents InputConnection from
         // being stuck in batch edit mode while the provider continues streaming.
         currentJob?.cancel()
         currentJob = null
         isStreaming = false
+        // Notify caller so they can show feedback (toast, haptic, etc.)
+        onCancelled?.invoke(committed)
         return true // consumed: don't echo the key
     }
 

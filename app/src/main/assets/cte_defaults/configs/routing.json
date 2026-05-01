@@ -3,6 +3,12 @@
   "killSwitch": false,
   "killSwitchReason": "set true to force all requests local-only (e.g. travel, billing freeze)",
 
+  "budgets": {
+    "cheap":    ["deepseek", "local", "gemini_1"],
+    "balanced": [],
+    "premium":  ["anthropic", "openai"]
+  },
+
   "rules": [
     { "if": "trigger.pipeline == 'tot'",                                  "use": "anthropic" },
     { "if": "trigger.pipeline == 'cot' && trigger.maxTokens > 1024",      "use": "anthropic" },

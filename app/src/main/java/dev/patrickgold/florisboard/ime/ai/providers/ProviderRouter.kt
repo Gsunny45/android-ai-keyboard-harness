@@ -153,14 +153,9 @@ class ProviderRouter(
             }
         }
 
-        // 2. Budget-based override
-        val budgetMap = mapOf(
-            "cheap"   to listOf("deepseek", "local", "gemini_1"),
-            "balanced" to null, // use normal routing
-            "premium" to listOf("anthropic", "openai"),
-        )
-        val budgetPreferred = budgetMap[prompt.budget]
-        if (budgetPreferred != null) {
+        // 2. Budget-based override — reads ordered provider list from routing.json
+        val budgetPreferred = routingConfig.budgets[prompt.budget]
+        if (budgetPreferred != null && budgetPreferred.isNotEmpty()) {
             for (id in budgetPreferred) {
                 if (isAvailable(id)) return id
             }
@@ -297,12 +292,14 @@ class ProviderRouter(
 }
 
 /**
- * Routing configuration matching triggers.json "routing" section.
+ * Routing configuration loaded from routing.json.
  */
 data class RoutingConfig(
     val default: String = "local",
     val rules: List<RoutingRule> = emptyList(),
     val providers: Map<String, ProviderConfig> = emptyMap(),
+    /** Budget tier -> ordered provider ID list. Empty list = skip to normal routing. */
+    val budgets: Map<String, List<String>> = emptyMap(),
 )
 
 data class RoutingRule(

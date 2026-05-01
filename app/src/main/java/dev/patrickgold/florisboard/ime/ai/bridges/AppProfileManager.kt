@@ -1,7 +1,9 @@
 package dev.patrickgold.florisboard.ime.ai.bridges
 
 import android.content.Context
+import android.os.LocaleList
 import android.view.inputmethod.EditorInfo
+import java.util.Locale
 
 /**
  * Tracks which app the user is currently interacting with.
@@ -19,6 +21,10 @@ class AppProfileManager {
     var currentPackageId: String? = null
         private set
 
+    /** The primary locale of the active text field, or null. Used to set recognizer language. */
+    var currentLocale: Locale? = null
+        private set
+
     /**
      * Called by the IME service when [InputMethodService.onStartInputView]
      * or [InputMethodService.onFinishInputView] fires.
@@ -26,6 +32,7 @@ class AppProfileManager {
     fun onEditorInfoReceived(info: EditorInfo?) {
         currentEditorInfo = info
         currentPackageId = info?.packageName
+        currentLocale = info?.hintLocales?.get(0) ?: Locale.getDefault()
     }
 
     /** Convenience: returns [currentPackageId] as a non-null string or "unknown". */

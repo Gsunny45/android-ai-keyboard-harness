@@ -53,6 +53,17 @@ class CteKeysActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "CteKeysActivity"
+
+        /**
+         * Intent action for injecting API keys via ADB.
+         * Usage:
+         *   adb shell am start -n dev.patrickgold.florisboard.vault.debug/ \
+         *       dev.patrickgold.florisboard.ime.ai.CteKeysActivity \
+         *       --ei inject 1 -e keyRef GROQ_KEY -e keyValue "<actual_key>"
+         */
+        private const val EXTRA_INJECT = "inject"
+        private const val EXTRA_KEY_REF = "keyRef"
+        private const val EXTRA_KEY_VALUE = "keyValue"
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -61,6 +72,23 @@ class CteKeysActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val keyVault = KeyVault.getInstance(this)
+
+        // Handle ADB key injection
+        if (intent.getIntExtra(EXTRA_INJECT, 0) == 1) {
+            val keyRef = intent.getStringExtra(EXTRA_KEY_REF)
+            val keyValue = intent.getStringExtra(EXTRA_KEY_VALUE)
+            if (keyRef != null && keyValue != null && keyValue.isNotBlank()) {
+                keyVault.set(keyRef, keyValue.trim())
+                Log.i(TAG, "Key injected via ADB: $keyRef (${keyValue.length} chars)")
+                Toast.makeText(this, "$keyRef saved via ADB", Toast.LENGTH_SHORT).show()
+            } else {
+                Log.w(TAG, "ADB inject: missing keyRef or keyValue extras")
+                Toast.makeText(this, "Inject failed: need keyRef + keyValue extras", Toast.LENGTH_SHORT).show()
+            }
+            finish()
+            return
+        }
+
         val providers = loadProvidersFromDisk()
 
         setContent {

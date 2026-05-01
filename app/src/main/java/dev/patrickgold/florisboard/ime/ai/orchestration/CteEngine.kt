@@ -1,8 +1,11 @@
 package dev.patrickgold.florisboard.ime.ai.orchestration
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.inputmethod.InputConnection
+import android.widget.Toast
 import dev.patrickgold.florisboard.ime.ai.output.InlineRenderer
 import dev.patrickgold.florisboard.ime.ai.output.OutputModeRouter
 import dev.patrickgold.florisboard.ime.ai.output.OverlayRenderer
@@ -384,18 +387,55 @@ class CteEngine(
                 return null
             }
 
-            // Build routing config
+            // Build routing config — load from routing.json
+            val routingFile = File(configStore.getConfigsDir(), "routing.json")
+            val routingDefaults: JsonObject = if (routingFile.exists()) {
+                try {
+                    Json.parseToJsonElement(routingFile.readText()).jsonObject
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse routing.json, using defaults", e)
+                    JsonObject(emptyMap())
+                }
+            } else {
+                Log.w(TAG, "routing.json not found at ${routingFile.path}; using defaults")
+                JsonObject(emptyMap())
+            }
+
+            val routingRules = routingDefaults["rules"]?.jsonArray?.mapNotNull { el ->
+                val ruleObj = el.jsonObject
+                val condition = ruleObj["if"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                val use = ruleObj["use"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                RoutingRule(condition, use)
+            } ?: emptyList()
+
+            val budgets = routingDefaults["budgets"]?.jsonObject?.mapValues { (_, value) ->
+                value.jsonArray.map { it.jsonPrimitive.content }
+            } ?: emptyMap()
+
             val routingConfig = RoutingConfig(
-                default = json["routing"]?.jsonObject?.get("default")?.jsonPrimitive?.content
+                default = routingDefaults["default"]?.jsonPrimitive?.content
                     ?: providerInstances.keys.firstOrNull() ?: "local",
-                rules = emptyList(),
+                rules = routingRules,
                 providers = providerConfigMap,
+                budgets = budgets,
             )
 
             // Build pipeline components
             val healthTracker = HealthTracker()
             val ruleParser = RuleParser()
-            val inlineRenderer = InlineRenderer(scope)
+            val inlineRenderer = InlineRenderer(
+                scope = scope,
+                onCancelled = { tokens ->
+                    Handler(Looper.getMainLooper()).post {
+                        Toast.makeText(
+                            context,
+                            if (tokens > 0) "Generation stopped — $tokens tokens kept"
+                            else "Generation cancelled",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                },
+            )
             val stripRenderer = StripRenderer()
             val skillsFile = File(configStore.getConfigsDir(), "skills.json")
             val overlayRenderer = OverlayRenderer(context, skillsFile)
@@ -434,5 +474,30 @@ class CteEngine(
     fun warmUp() {
         loadTriggersConfig()
         Log.i(TAG, "CteEngine warmed up")
+    }
+
+    /**
+     * Reloads all configuration from disk: clears the cached trigger map
+     * and pipeline so the next trigger detection re-reads triggers.json,
+     * routing.json, and reinstantiates providers.
+     *
+     * Call from CteSettingsActivity "Reload config" button.
+     *
+     * @return true if the config tree was found and reload was queued,
+     *         false if the config directory is missing.
+     */
+    fun reloadConfig(): Boolean {
+        val configDir = configStore.getConfigsDir()
+        if (!configDir.exists()) {
+            Log.w(TAG, "reloadConfig: config dir missing at ${configDir.path}")
+            return false
+        }
+        // Invalidate memory caches so the next trigger re-reads from disk
+        registeredTriggers = null
+        pipeline = null
+        pipelineInitAttempted = false
+
+        Log.i(TAG, "CteEngine caches cleared — next trigger will reload from disk")
+        return true
     }
 }

@@ -16,9 +16,13 @@
 
 package dev.patrickgold.florisboard
 
+import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.content.res.Configuration
 import android.inputmethodservice.ExtractEditText
 import android.os.Build
@@ -79,7 +83,14 @@ import dev.patrickgold.florisboard.app.FlorisAppActivity
 import dev.patrickgold.florisboard.app.devtools.DevtoolsOverlay
 import dev.patrickgold.florisboard.app.florisPreferenceModel
 import dev.patrickgold.florisboard.ime.ImeUiMode
+import dev.patrickgold.florisboard.ime.ai.PermissionTrampolineActivity
+import dev.patrickgold.florisboard.ime.ai.bridges.AppProfileManager
 import dev.patrickgold.florisboard.ime.ai.orchestration.CteEngine
+import dev.patrickgold.florisboard.ime.ai.providers.KeyVault
+import dev.patrickgold.florisboard.ime.ai.trigger.TriggerParser
+import dev.patrickgold.florisboard.ime.ai.voice.SpokenTriggerNormalizer
+import dev.patrickgold.florisboard.ime.ai.voice.VoiceInputManager
+import kotlinx.coroutines.launch
 import dev.patrickgold.florisboard.ime.clipboard.ClipboardInputLayout
 import dev.patrickgold.florisboard.ime.core.SelectSubtypePanel
 import dev.patrickgold.florisboard.ime.core.isSubtypeSelectionShowing
@@ -236,6 +247,8 @@ class FlorisImeService : LifecycleInputMethodService() {
             val ims = FlorisImeServiceReference.get() ?: return false
             val imm = ims.systemServiceOrNull(InputMethodManager::class) ?: return false
             val list: List<InputMethodInfo> = imm.enabledInputMethodList
+
+            // Pass 1: look for an IME with a subtype explicitly marked mode="voice"
             for (el in list) {
                 for (i in 0 until el.subtypeCount) {
                     if (el.getSubtypeAt(i).mode != "voice") continue
@@ -251,8 +264,71 @@ class FlorisImeService : LifecycleInputMethodService() {
                     }
                 }
             }
+
+            // Pass 2: some voice IMEs (e.g. Google Voice Input via com.google.android.tts)
+            // are standalone services with no subtypes — match by service class name.
+            val voiceIme = list.firstOrNull { el ->
+                el.serviceName.contains("voice", ignoreCase = true) ||
+                el.id.contains("voice", ignoreCase = true)
+            }
+            if (voiceIme != null) {
+                if (AndroidVersion.ATLEAST_API28_P) {
+                    ims.switchInputMethod(voiceIme.id)
+                    return true
+                } else {
+                    ims.window.window?.let { window ->
+                        @Suppress("DEPRECATION")
+                        imm.setInputMethod(window.attributes.token, voiceIme.id)
+                        return true
+                    }
+                }
+            }
+
             ims.showShortToast("Failed to find voice IME, do you have one installed?")
             return false
+        }
+
+        /**
+         * Route the VOICE_INPUT key press to the in-process [VoiceInputManager].
+         * Falls back to the system voice IME switcher if recognition is unavailable.
+         *
+         * Before starting recording, checks that [Manifest.permission.RECORD_AUDIO]
+         * is granted. If not, launches the transparent [PermissionTrampolineActivity]
+         * to request it at runtime. The IME registers a broadcast receiver for
+         * [PermissionTrampolineActivity.ACTION_VOICE_PERMISSION_GRANTED] to retry
+         * once permission is obtained.
+         */
+        fun startVoiceInput(): Boolean {
+            val ims = FlorisImeServiceReference.get() ?: return false
+
+            // Check runtime permission — AudioRecord requires it on API 23+
+            if (ContextCompat.checkSelfPermission(ims, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                flogWarning { "RECORD_AUDIO not granted — launching permission trampoline" }
+                val intent = Intent(ims, PermissionTrampolineActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                ims.startActivity(intent)
+                return true  // optimistic — receiver will retry if granted
+            }
+
+            val vim = ims.voiceInputManager
+            if (vim != null) {
+                vim.startRecording()
+                return true
+            }
+            return switchToVoiceInputMethod()
+        }
+
+        /**
+         * Reload CTE engine configuration from disk.
+         * Call from CteSettingsActivity "Reload config" button.
+         * Returns true if the engine was found and caches were cleared.
+         */
+        fun reloadCteConfig(): Boolean {
+            val ims = FlorisImeServiceReference.get() ?: return false
+            return ims.cteEngine?.reloadConfig() ?: false
         }
     }
 
@@ -274,8 +350,23 @@ class FlorisImeService : LifecycleInputMethodService() {
 
     private val wallpaperChangeReceiver = WallpaperChangeReceiver()
 
+    /** Broadcast receiver to force-open KeyVault after device unlock. */
+    private val unlockReceiver = UnlockReceiver()
+
+    /**
+     * Broadcast receiver for the [PermissionTrampolineActivity] result.
+     * Listens for ACTION_VOICE_PERMISSION_GRANTED to retry recording.
+     */
+    private val permissionReceiver = PermissionReceiver()
+
     /** CTE (Context-aware Type Engine) coordinator. Lazily initialized. */
     private var cteEngine: CteEngine? = null
+
+    /** Voice input manager — wires the VOICE_INPUT key to the whisper app. */
+    private var voiceInputManager: VoiceInputManager? = null
+
+    /** Tracks which app is in the foreground (for voice auto-routing). */
+    private val appProfileManager = AppProfileManager()
 
     init {
         setTheme(R.style.FlorisImeTheme)
@@ -293,9 +384,39 @@ class FlorisImeService : LifecycleInputMethodService() {
         @Suppress("DEPRECATION") // We do not retrieve the wallpaper but only listen to changes
         registerReceiver(wallpaperChangeReceiver, IntentFilter(Intent.ACTION_WALLPAPER_CHANGED))
 
+        // Register ACTION_USER_UNLOCKED receiver so KeyVault can force-open
+        // EncryptedSharedPreferences as soon as the device is unlocked.
+        registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_UNLOCKED))
+
+        // Register permission trampoline result receiver
+        registerReceiver(
+            permissionReceiver,
+            IntentFilter(PermissionTrampolineActivity.ACTION_VOICE_PERMISSION_GRANTED).apply {
+                addAction(PermissionTrampolineActivity.ACTION_VOICE_PERMISSION_DENIED)
+            },
+        )
+
         // Initialize CTE engine (warm up — lazy build on first trigger)
         cteEngine = CteEngine(this, lifecycleScope)
         cteEngine?.warmUp()
+
+        // Initialize voice input manager (in-process SpeechRecognizer, no external app)
+        voiceInputManager = VoiceInputManager(
+            context = this,
+            scope = lifecycleScope,
+            normalizer = SpokenTriggerNormalizer(),
+            triggerParser = TriggerParser(),
+            appProfileManager = appProfileManager,
+        )
+
+        // Commit voice transcripts to the active editor as they arrive
+        lifecycleScope.launch {
+            voiceInputManager!!.processedOutput.collect { text ->
+                if (text != null) {
+                    editorInstance.commitText(text)
+                }
+            }
+        }
     }
 
     override fun onCreateInputView(): View {
@@ -334,6 +455,9 @@ class FlorisImeService : LifecycleInputMethodService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        voiceInputManager?.destroy()
+        unregisterReceiver(unlockReceiver)
+        unregisterReceiver(permissionReceiver)
         unregisterReceiver(wallpaperChangeReceiver)
         FlorisImeServiceReference = WeakReference(null)
         inputWindowView = null
@@ -350,6 +474,7 @@ class FlorisImeService : LifecycleInputMethodService() {
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         flogInfo { "restarting=$restarting info=${info?.debugSummarize()}" }
         super.onStartInputView(info, restarting)
+        appProfileManager.onEditorInfoReceived(info)
         if (info == null) return
         val editorInfo = FlorisEditorInfo.wrap(info)
         activeState.batchEdit {
@@ -730,6 +855,44 @@ class FlorisImeService : LifecycleInputMethodService() {
 
         override fun getAccessibilityClassName(): CharSequence {
             return javaClass.name
+        }
+    }
+
+    /**
+     * Receiver that fires when the user unlocks the device after boot.
+     * Forces KeyVault to open its EncryptedSharedPreferences immediately,
+     * rather than lazily on the first key access.
+     */
+    private inner class UnlockReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_USER_UNLOCKED) {
+                KeyVault.getInstance(context).onUserUnlocked()
+            }
+        }
+    }
+
+    /**
+     * Receiver that handles the result of [PermissionTrampolineActivity].
+     *
+     * - GRANTED: retries voice recording now that the user has approved mic access.
+     * - DENIED: shows a toast explaining voice input won't work.
+     */
+    private inner class PermissionReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                PermissionTrampolineActivity.ACTION_VOICE_PERMISSION_GRANTED -> {
+                    flogInfo { "Permission granted — starting voice recording" }
+                    voiceInputManager?.let { vim ->
+                        vim.startRecording()
+                    } ?: run {
+                        flogWarning { "VoiceInputManager not ready after permission grant" }
+                    }
+                }
+                PermissionTrampolineActivity.ACTION_VOICE_PERMISSION_DENIED -> {
+                    flogWarning { "RECORD_AUDIO denied by user — voice input unavailable" }
+                    showShortToast("Microphone permission denied — voice input unavailable")
+                }
+            }
         }
     }
 

@@ -117,21 +117,49 @@ class TriggerConfigStore private constructor(
     /**
      * Reload all CTE configuration from disk.
      *
-     * Currently a placeholder that verifies the config tree exists and
-     * returns true. Will be wired into the full CTE reload pipeline
-     * (ARCHITECTURE.md boot steps 2-9) once the remaining engine
-     * components (PersonaMerger, SkillEngine, PluginLoader, EventLogger)
-     * are implemented.
+     * Validates that required config files (triggers.json, routing.json)
+     * exist and are parseable JSON. More advanced validation
+     * (schema, migration, persona/skill fusion) is deferred to future
+     * phases.
      *
-     * @return true if the CTE tree exists on disk and the reload
-     *         pipeline could be triggered, false otherwise.
+     * The actual engine reload (cache invalidation) is handled by
+     * [CteEngine.reloadConfig], which is called separately from
+     * CteSettingsActivity.
+     *
+     * @return true if the CTE tree exists and required configs are valid,
+     *         false otherwise.
      */
     fun reloadConfig(): Boolean {
         if (!cteRoot.exists()) {
             Log.w(TAG, "reloadConfig: CTE tree missing at ${cteRoot.path}; seeding defaults first")
             ensureDefaults()
         }
-        // TODO: Wire into full CTE reload pipeline:
+
+        val configsDir = getConfigsDir()
+        val requiredFiles = listOf("triggers.json", "routing.json")
+        var allValid = true
+
+        for (fileName in requiredFiles) {
+            val file = File(configsDir, fileName)
+            if (!file.exists()) {
+                Log.w(TAG, "reloadConfig: missing required config: $fileName")
+                allValid = false
+                continue
+            }
+            // Validate JSON is parseable
+            try {
+                val text = file.readText()
+                org.json.JSONObject(text)
+                Log.d(TAG, "reloadConfig: $fileName valid (${text.length} bytes)")
+            } catch (e: Exception) {
+                Log.e(TAG, "reloadConfig: $fileName is not valid JSON: ${e.message}")
+                allValid = false
+            }
+        }
+
+        Log.i(TAG, "reloadConfig: all configs valid=$allValid at ${cteRoot.path}")
+
+        // Future: advanced pipeline (from ARCHITECTURE.md boot steps):
         //   2. Validate triggers.json vs schema
         //   3. Migrate schema version if needed
         //   4. Load personas, skills, routing JSONs
@@ -140,8 +168,8 @@ class TriggerConfigStore private constructor(
         //   7. Preload KeyVault
         //   8. Warm health checks
         //   9. Open event log
-        Log.i(TAG, "reloadConfig: CTE tree present at ${cteRoot.path} (reload stub)")
-        return true
+
+        return allValid
     }
 
     // ── Path accessors ────────────────────────────────────────────────

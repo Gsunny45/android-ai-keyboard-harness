@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Permission needed for in-process voice input via SpeechRecognizer -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
     <!-- Permission needed to vibrate if the user has key press vibration enabled -->
     <uses-permission android:name="android.permission.VIBRATE"/>
 
@@ -217,6 +220,14 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <data android:scheme="ui" android:host="florisboard" android:pathPrefix="/cte/voice"/>
             </intent-filter>
+        </activity>
+
+        <!-- Permission Trampoline (transparent activity for RECORD_AUDIO runtime request) -->
+        <activity
+            android:name="dev.patrickgold.florisboard.ime.ai.PermissionTrampolineActivity"
+            android:theme="@style/FlorisAppTheme.Transparent"
+            android:exported="false"
+            android:excludeFromRecents="true">
         </activity>
 
     </application>
