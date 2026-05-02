@@ -10,6 +10,8 @@ import dev.patrickgold.florisboard.ime.ai.output.InlineRenderer
 import dev.patrickgold.florisboard.ime.ai.output.OutputModeRouter
 import dev.patrickgold.florisboard.ime.ai.output.OverlayRenderer
 import dev.patrickgold.florisboard.ime.ai.output.StripRenderer
+import dev.patrickgold.florisboard.ime.ai.bridges.AppProfileManager
+import dev.patrickgold.florisboard.ime.ai.bridges.ObsidianBridge
 import dev.patrickgold.florisboard.ime.ai.providers.*
 import dev.patrickgold.florisboard.ime.ai.trigger.TriggerConfigStore
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +37,8 @@ import java.io.File
 class CteEngine(
     private val context: Context,
     private val scope: CoroutineScope,
+    private val obsidianBridge: ObsidianBridge? = null,
+    private val appProfileManager: AppProfileManager? = null,
 ) {
     companion object {
         private const val TAG = "CteEngine"
@@ -127,8 +131,9 @@ class CteEngine(
         scope.launch {
             try {
                 val triggerDef = triggerResult.triggerDef
-                val systemPrompt = triggerDef.systemTemplate
-                val userPrompt = triggerResult.text
+                val rawSystem = triggerDef.systemTemplate
+                val rawUser = triggerResult.text
+                val (systemPrompt, userPrompt) = resolveTemplateVariables(rawSystem, rawUser)
 
                 val resolvedPrompt = ResolvedPrompt(
                     system = systemPrompt,
@@ -181,6 +186,131 @@ class CteEngine(
         ic.beginBatchEdit()
         ic.commitText(output, 1)
         ic.endBatchEdit()
+    }
+
+    // ── Template variable resolution ────────────────────────────────────
+
+    /**
+     * Resolves CTE template variables ({{vault.name}}, {{file.path}},
+     * {{system.time.iso}}, {{system.tz}}, {{#each file.tags}}...{{/each}}
+     * blocks) in system and user prompt strings.
+     *
+     * Vault name comes from [ObsidianBridge] (manually configured).
+     * File path and tags degrade gracefully to empty strings / removed blocks
+     * when window title is unavailable (no AccessibilityService yet).
+     */
+    private fun resolveTemplateVariables(
+        systemPrompt: String,
+        userPrompt: String,
+    ): Pair<String, String> {
+        var resolvedSystem = systemPrompt
+        var resolvedUser = userPrompt
+
+        // ── Resolve {{vault.name}} ──
+        val vaultName = obsidianBridge?.getVaultName()
+        if (vaultName != null) {
+            resolvedSystem = resolvedSystem.replace("{{vault.name}}", vaultName)
+            resolvedUser = resolvedUser.replace("{{vault.name}}", vaultName)
+        } else {
+            // Graceful degradation: replace with empty string if not configured
+            resolvedSystem = resolvedSystem.replace("{{vault.name}}", "")
+            resolvedUser = resolvedUser.replace("{{vault.name}}", "")
+        }
+
+        // ── Resolve {{file.path}} ──
+        // Requires window title from AccessibilityService — graceful degradation
+        resolvedSystem = resolvedSystem.replace("{{file.path}}", "")
+        resolvedUser = resolvedUser.replace("{{file.path}}", "")
+
+        // ── Resolve {{file.tags|none}} and {{file.tags}} ──
+        resolvedSystem = resolvedSystem.replace("{{file.tags|none}}", "")
+        resolvedSystem = resolvedSystem.replace("{{file.tags}}", "")
+        resolvedUser = resolvedUser.replace("{{file.tags|none}}", "")
+        resolvedUser = resolvedUser.replace("{{file.tags}}", "")
+
+        // ── Strip {{#each file.tags}}...{{/each}} blocks ──
+        // Handlebars-style iteration — remove entirely when tags are unavailable
+        resolvedSystem = removeEachBlock(resolvedSystem, "file.tags")
+        resolvedUser = removeEachBlock(resolvedUser, "file.tags")
+
+        // ── Resolve {{system.time.iso}} ──
+        val now = java.time.LocalDateTime.now()
+        val iso = now.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        resolvedSystem = resolvedSystem.replace("{{system.time.iso}}", iso)
+        resolvedUser = resolvedUser.replace("{{system.time.iso}}", iso)
+
+        // ── Resolve {{system.tz}} ──
+        val tz = java.time.ZoneId.systemDefault().id
+        resolvedSystem = resolvedSystem.replace("{{system.tz}}", tz)
+        resolvedUser = resolvedUser.replace("{{system.tz}}", tz)
+
+        // ── Resolve {{system.selection}} ──
+        // Resolve to empty string (selection is already in user_input if active)
+        resolvedSystem = resolvedSystem.replace("{{system.selection}}", "")
+        resolvedUser = resolvedUser.replace("{{system.selection}}", "")
+
+        // ── Strip any remaining unresolved {{variables}} gracefully ──
+        // Leave {{user_input}} intact — it's handled separately in the pipeline
+        resolvedSystem = stripUnresolvedTemplateVars(resolvedSystem)
+        resolvedUser = stripUnresolvedTemplateVars(resolvedUser)
+
+        return Pair(resolvedSystem, resolvedUser)
+    }
+
+    /**
+     * Remove a {{#each varName}}...{{/each}} block from text.
+     * Simple substring-based approach (not regex) to avoid KSP escaping issues.
+     */
+    private fun removeEachBlock(text: String, varName: String): String {
+        val startTag = "{{#each $varName}}"
+        val endTag = "{{/each}}"
+        val sb = StringBuilder()
+        var remaining = text
+        while (true) {
+            val startIdx = remaining.indexOf(startTag)
+            if (startIdx < 0) {
+                sb.append(remaining)
+                break
+            }
+            sb.append(remaining.substring(0, startIdx))
+            val endIdx = remaining.indexOf(endTag, startIdx + startTag.length)
+            if (endIdx < 0) {
+                // No closing tag — skip the rest
+                remaining = ""
+                break
+            }
+            remaining = remaining.substring(endIdx + endTag.length)
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Strip unresolved {{variable}} placeholders while preserving {{user_input}}.
+     */
+    private fun stripUnresolvedTemplateVars(text: String): String {
+        val sb = StringBuilder()
+        var i = 0
+        while (i < text.length) {
+            val openIdx = text.indexOf("{{", i)
+            if (openIdx < 0) {
+                sb.append(text.substring(i))
+                break
+            }
+            sb.append(text.substring(i, openIdx))
+            val closeIdx = text.indexOf("}}", openIdx + 2)
+            if (closeIdx < 0) {
+                sb.append(text.substring(openIdx))
+                break
+            }
+            val varName = text.substring(openIdx + 2, closeIdx).trim()
+            if (varName == "user_input" || varName.startsWith("user_input")) {
+                // Preserve {{user_input}} and {{user_input|...}}
+                sb.append(text.substring(openIdx, closeIdx + 2))
+            }
+            // else: drop the entire {{...}} placeholder
+            i = closeIdx + 2
+        }
+        return sb.toString()
     }
 
     // ── Trigger detection ───────────────────────────────────────────────

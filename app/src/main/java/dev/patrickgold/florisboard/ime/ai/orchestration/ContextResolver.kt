@@ -1,6 +1,7 @@
 package dev.patrickgold.florisboard.ime.ai.orchestration
 
 import android.view.accessibility.AccessibilityNodeInfo
+import dev.patrickgold.florisboard.ime.ai.bridges.ObsidianBridge
 
 /**
  * Resolves app context (vault name, file path) from the foreground window.
@@ -21,8 +22,9 @@ data class AppContext(
 class ContextResolver {
 
     companion object {
+        // Regex is shared from ObsidianBridge to avoid duplication.
         // Obsidian window title format: "VaultName - path/to/note.md - Obsidian"
-        private val OBSIDIAN_TITLE = Regex("""^(.+?)\s*-\s*(.+?)\s*-\s*Obsidian$""")
+        private val OBSIDIAN_TITLE = ObsidianBridge.OBSIDIAN_TITLE
     }
 
     /**

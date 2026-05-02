@@ -1,5 +1,5 @@
 # Next Chat Context — android-ai-keyboard-harness
-_Updated 2026-05-01. Phone is USB-connected and ready._
+_Generated 2026-05-02. Phone is USB-connected and ready._
 
 ---
 
@@ -118,6 +118,35 @@ Already wired in `CteEngine.buildPipeline()` — confirmed, no changes needed.
 
 ---
 
+## 2c. What Was Done (2026-05-02)
+
+### ✅ Obsidian Bridge Wired — Template Variable Resolution
+**Files:** [`ObsidianBridge.kt`](app/src/main/java/dev/patrickgold/florisboard/ime/ai/bridges/ObsidianBridge.kt), [`CteEngine.kt`](app/src/main/java/dev/patrickgold/florisboard/ime/ai/orchestration/CteEngine.kt), [`FlorisImeService.kt`](app/src/main/kotlin/dev/patrickgold/florisboard/FlorisImeService.kt), [`CteSettingsActivity.kt`](app/src/main/java/dev/patrickgold/florisboard/ime/ai/CteSettingsActivity.kt), [`ContextResolver.kt`](app/src/main/java/dev/patrickgold/florisboard/ime/ai/orchestration/ContextResolver.kt), [`obsidian.triggers.json`](app/src/main/assets/cte_defaults/profiles/obsidian.triggers.json)
+
+| Component | Change |
+|---|---|
+| `ObsidianBridge` | Fixed `===` reference identity bug in `extractFrontmatter()`. Added explicit `StandardCharsets.UTF_8`. Added `setVaultName()`/`getVaultName()` config methods (persisted via SharedPreferences). Made `OBSIDIAN_TITLE` regex public. Simplified `navigateToFile()`. |
+| `ContextResolver` | Removed duplicated `OBSIDIAN_TITLE` regex — now references `ObsidianBridge.OBSIDIAN_TITLE` |
+| `CteEngine` | Added `obsidianBridge` + `appProfileManager` constructor params. New `resolveTemplateVariables()` method: resolves `{{vault.name}}`, `{{file.path}}`, `{{file.tags}}`, `{{system.time.iso}}`, `{{system.tz}}`, strips `{{#each file.tags}}` blocks gracefully, preserves `{{user_input}}`. Wired into `onSelectionChanged()` pipeline. |
+| `FlorisImeService` | Instantiates `ObsidianBridge` in `onCreate()`. Passes to `CteEngine` constructor. |
+| `CteSettingsActivity` | Added "Obsidian Vault" section in General — `OutlinedTextField` for vault name + "Save Vault Name" button. Persists via `ObsidianBridge.setVaultName()`. |
+| `obsidian.triggers.json` | Updated system prompts to read naturally when template variables resolve to empty (no window title yet without AccessibilityService) |
+
+### ✅ Full Repo Exploration
+**Completed:** Catalog of all 33 `.kt` files in the AI layer, 18 assets files, and all Kotlin-side integration points. Findings:
+- **[`VoiceSettingsActivity.kt`](app/src/main/java/dev/patrickgold/florisboard/ime/ai/settings/VoiceSettingsActivity.kt)** — Fully implemented Compose UI for spoken-trigger mappings, but **unconnected** from runtime `SpokenTriggerNormalizer`
+- **`profiles/gmail.triggers.json`** + **`profiles/whatsapp.triggers.json`** — Fully specified per-app profiles, **not loaded** by CteEngine (no per-app trigger routing)
+- **Design artifacts** — `plugins/`, `evals/`, `docs/`, `scripts/` directories are forward-planning documents only (PluginLoader, EvalRunner, SkillEngine don't exist in code)
+- **Three major architectural gaps identified:**
+  1. **✅ NOW FIXED:** Template variable resolution didn't exist — CteEngine passed `{{vault.name}}` raw to providers
+  2. **🔲 STILL OPEN:** App profiles not wired — `triggers.json` declares `appProfiles` but CteEngine never loads per-app overrides
+  3. **🔲 STILL OPEN:** Bridge layer is dead code for window titles — `AccessibilityBridge.resolveWindowTitleFromAccessibility()` always returns null (no AccessibilityService in manifest)
+
+### ✅ Obsidian Plugin Ecosystem Analysis — OPTIONS.md
+**New file:** [`OPTIONS.md`](OPTIONS.md) — catalog analysis of 38+ Obsidian plugins. Core insight: phone-only integration = convention alignment (keyboard output format matching what plugins expect to read). Templater tokens are literal text — no escaping needed, just prompt engineering.
+
+---
+
 ## 3. Key Files — Exact Paths
 
 ```
@@ -149,10 +178,11 @@ app/src/main/java/dev/patrickgold/florisboard/ime/ai/
   output/OutputModeRouter.kt
   output/OverlayRenderer.kt
   output/StripRenderer.kt
-  bridges/AccessibilityBridge.kt
-  bridges/AppProfileManager.kt            ← currentLocale field
+  bridges/AccessibilityBridge.kt          ← ⬜ windowTitle always null (no AccessibilityService)
+  bridges/AppProfileManager.kt            ← currentLocale + currentPackageId
+  bridges/ObsidianBridge.kt               ← ✅ WIRED into CteEngine + vault name config
   CteKeysActivity.kt                      ← ✅ ADB key injection support
-  CteSettingsActivity.kt                  ← ✅ wired to reloadCteConfig()
+  CteSettingsActivity.kt                  ← ✅ reloadCteConfig() + vault name setting
   PermissionTrampolineActivity.kt         ← ✅ NEW — runtime RECORD_AUDIO request
 
 # Core IME (Kotlin)
@@ -216,31 +246,52 @@ VOICE_INPUT key press
 
 ---
 
-## 6. Priority Queue for Next Session
+## 6. Next Session — Start Here
 
-### ~~Markwon Markdown Rendering~~ — ✅ DONE (2026-05-01)
-### ~~Inline Cancellation Feedback~~ — ✅ DONE (2026-05-01)
+### Priority: Wire App Profiles (highest ROI for remaining work)
 
-### ~~Priority 1 — UI: Add CTE/AI Entry to Main Settings Menu~~ — ✅ ALREADY DONE
-**Status:** CTE entry exists in `HomeScreen.kt` line 158 — launches `CteSettingsActivity` directly. Confirmed visible on device.
+The app profile system has everything configured but nothing wired:
+- `appProfiles` section in `triggers.json` maps `md.obsidian` → `profiles/obsidian.triggers.json` (with 6 custom triggers), `com.google.android.gm` → `gmail.triggers.json`, `com.whatsapp` → `whatsapp.triggers.json`
+- `AppProfileManager` tracks `currentPackageId` in `FlorisImeService` and is already passed to `CteEngine`
+- `CteEngine.detectTrigger()` loads a flat trigger map — needs to merge per-app overrides
 
-### Priority 2 — Icons for CTE Features (Priority 4 from old context)
-**Files:** `ComputingEvaluator.kt`, `KeyCode.kt`, `QuickAction.kt`
-**Scope:** Add icon entries for CTE-related key codes (if any). Current `VOICE_INPUT` already has `Icons.Default.KeyboardVoice`. Check if any new key codes were added that lack icons.
-**Note:** Revisit if there are new `KeyCode` constants without `computeImageVector()` entries.
+**Implementation sketch:**
+1. `CteEngine.loadTriggersConfig()` → after loading base triggers, check `appProfileManager?.currentPackageId`
+2. Look up `appProfiles[pkg]` in triggers.json, load that profile file
+3. Merge `triggers_override` into the base trigger map (profile overrides take precedence)
+4. Optionally apply the profile's `basePersona` for template variable resolution
 
-### Priority 3 — Offline Voice: Vosk (Priority 1 from previous session)
-Offline STT to replace/parallel Whisper API.
-- Add Vosk SDK dep: `com.alphacephei:vosk-android:0.3.47`
-- Download model on first-run to `filesDir/vosk/`
-- Wire into `VoiceInputManager` as primary offline path
-- Model target: `vosk-model-en-us-0.22-lgraph` (128MB)
+### Suggested Next Steps (also open)
+1. **VoiceSettingsActivity** — Connect the Compose UI to `SpokenTriggerNormalizer` so users can add spoken trigger mappings without code changes. Currently the UI is fully built but the normalizer uses hardcoded mappings.
+2. **AccessibilityService** — Add a proper `AccessibilityService` to `AndroidManifest.xml` so `AccessibilityBridge.resolveWindowTitleFromAccessibility()` returns actual window titles. This unlocks `{{file.path}}` and `{{file.tags}}` resolution.
+3. **Templater token prompting** — Update `obsidian.triggers.json` `/doc` and `/daily` system prompts to instruct the LLM to emit `<% tp.date.now() %>`, `{{title}}`, Dataview fields, and Tasks syntax. Tokens are literal text — no code changes needed in the render pipeline.
 
-### Priority 4 — Provider Health Indicators in Settings (TASK-011)
-Add per-provider status badges to `CteSettingsActivity` (last ping, error rate, health status).
+### Reference Documents
+- [`bridges/ObsidianBridge.kt`](app/src/main/java/dev/patrickgold/florisboard/ime/ai/bridges/ObsidianBridge.kt) — ✅ NOW WIRED — SAF file reader + vault name config
+- [`orchestration/ContextResolver.kt`](app/src/main/java/dev/patrickgold/florisboard/ime/ai/orchestration/ContextResolver.kt) — Obsidian window title parser (uses shared regex from ObsidianBridge)
+- [`bridges/AppProfileManager.kt`](app/src/main/java/dev/patrickgold/florisboard/ime/ai/bridges/AppProfileManager.kt) — Tracks foreground app pkg (passed to CteEngine)
+- [`bridges/AccessibilityBridge.kt`](app/src/main/java/dev/patrickgold/florisboard/ime/ai/bridges/AccessibilityBridge.kt) — ⬜ Window title always null
+- [`profiles/obsidian.triggers.json`](app/src/main/assets/cte_defaults/profiles/obsidian.triggers.json) — 6 Obsidian-specific trigger overrides (not yet loaded by engine)
+- [`profiles/gmail.triggers.json`](app/src/main/assets/cte_defaults/profiles/gmail.triggers.json) — 3 email-specific triggers (not yet loaded)
+- [`profiles/whatsapp.triggers.json`](app/src/main/assets/cte_defaults/profiles/whatsapp.triggers.json) — 2 chat-specific triggers (not yet loaded)
+- [`triggers.json`](app/src/main/assets/cte_defaults/configs/triggers.json) — Current trigger definitions (appProfiles section at bottom)
+- [`settings/VoiceSettingsActivity.kt`](app/src/main/java/dev/patrickgold/florisboard/ime/ai/settings/VoiceSettingsActivity.kt) — Full UI, unconnected from normalizer
+- [`OPTIONS.md`](OPTIONS.md) — Full Obsidian plugin integration analysis
+- [`build.gradle.kts`](app/build.gradle.kts) — Dependency declarations
 
-### Priority 5 — DeepSeek Provider Verification
-DeepSeek provider exists at `providers/DeepseekProvider.kt` and is wired in `buildPipeline()`. Verify end-to-end if `DEEPSEEK_KEY` is set.
+### Current Floor (what's already done and stable)
+- ✅ Voice input (Whisper + SpeechRecognizer fallback)
+- ✅ Markwon markdown rendering in overlay
+- ✅ Inline cancellation feedback
+- ✅ RECORD_AUDIO runtime permission trampoline
+- ✅ Config reload from disk
+- ✅ Routing rules + budgets from routing.json
+- ✅ ADB key injection
+- ✅ DeepSeek provider wired
+- ✅ CTE settings accessible from main settings screen
+- ✅ **Obsidian vault context wiring** (template variable resolution for `{{vault.name}}`, `{{system.time.iso}}`, `{{system.tz}}`)
+- ✅ **Vault name config** in CTE settings UI
+- ✅ **ObsidianBridge bug fixes** (reference identity bug, UTF-8 charset, deduplicated regex)
 
 ---
 
@@ -289,4 +340,8 @@ $adb = "C:\Users\MarsBase\Android\Sdk\platform-tools\adb.exe"
 - Permission receiver broadcasts are **not** ordered / sticky — if IME is dead when trampoline fires, the grant is lost (acceptable for now)
 - `RECORD_AUDIO` ADB grant persists across reinstalls on the **same device** — needs re-grant on fresh install or different device
 - `buildPipeline()` now reads `routing.json` for rules + budgets — previously was parsing `triggers.json["routing"]` which didn't exist
-- There is NO "FlorisBoard Settings → CTE Keys" shortcut in the main settings screen — must deep-link or launch CteKeysActivity directly. **This is Priority 1 for next session.**
+- CTE entry exists in `HomeScreen.kt` — accessible from main Settings → CTE Settings
+- `AccessibilityBridge.resolveWindowTitleFromAccessibility()` always returns null — no AccessibilityService declared in manifest. This means `{{file.path}}` and `{{file.tags}}` in system prompts resolve to empty strings.
+- `ObsidianBridge.kt` — ✅ NOW WIRED into CteEngine with vault name config via SharedPreferences. SAF vault read path still needs a directory picker in the UI to be exercised.
+- App profile triggers (`profiles/obsidian.triggers.json`, `gmail.triggers.json`, `whatsapp.triggers.json`) are defined and fully specified, but **no per-app trigger routing happens** — CteEngine loads a flat trigger map only. This is the next priority.
+- `VoiceSettingsActivity.kt` — full Compose UI for spoken-trigger mappings, but the runtime `SpokenTriggerNormalizer` still uses hardcoded mappings. The UI edits are in-memory-only and never reach the normalizer.

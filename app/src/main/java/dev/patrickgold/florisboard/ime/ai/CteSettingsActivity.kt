@@ -36,9 +36,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.lifecycleScope
 import dev.patrickgold.florisboard.FlorisImeService
+import dev.patrickgold.florisboard.ime.ai.bridges.ObsidianBridge
 import dev.patrickgold.florisboard.ime.ai.orchestration.LlamaServerService
 import dev.patrickgold.florisboard.ime.ai.providers.LlamaCppLocal
 import dev.patrickgold.florisboard.ime.ai.settings.VoiceSettingsActivity
@@ -70,6 +73,8 @@ class CteSettingsActivity : ComponentActivity() {
         TriggerConfigStore.getInstance(this).ensureDefaults()
 
         val providers = loadProviders()
+        val obsidianBridge = ObsidianBridge(this)
+        val initialVaultName = obsidianBridge.getVaultName() ?: ""
 
         setContent {
             val voskState by VoiceInputManager.sharedVoskState.collectAsState()
@@ -81,6 +86,17 @@ class CteSettingsActivity : ComponentActivity() {
                         onReloadConfig = { reloadConfig() },
                         onOpenApiKeys = { startActivity(Intent(this, CteKeysActivity::class.java)) },
                         onOpenVoiceSettings = { startActivity(Intent(this, VoiceSettingsActivity::class.java)) },
+                        vaultName = initialVaultName,
+                        onSaveVaultName = { name ->
+                            obsidianBridge.setVaultName(name)
+                            // Also reload CTE config so CteEngine picks up the new vault name
+                            FlorisImeService.reloadCteConfig()
+                            Toast.makeText(
+                                this@CteSettingsActivity,
+                                "Vault name saved",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        },
                         onStartMonitor = { startMonitor() },
                         onTestConnection = { testLocalConnection() },
                         voskState = voskState,
@@ -216,6 +232,8 @@ private fun SettingsScreen(
     onReloadConfig: () -> Unit,
     onOpenApiKeys: () -> Unit,
     onOpenVoiceSettings: () -> Unit,
+    vaultName: String,
+    onSaveVaultName: (String) -> Unit,
     onStartMonitor: () -> Unit,
     onTestConnection: suspend () -> Unit,
     voskState: VoskState,
@@ -288,6 +306,34 @@ private fun SettingsScreen(
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onOpenVoiceSettings, modifier = Modifier.width(280.dp)) {
             Text("Voice Trigger Mappings")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // ── Obsidian Vault Name ──
+        Text("Obsidian Vault", style = MaterialTheme.typography.titleSmall)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            "Set your vault name so {{vault.name}} resolves in Obsidian system templates.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        var editName by remember { mutableStateOf(vaultName) }
+        OutlinedTextField(
+            value = editName,
+            onValueChange = { editName = it },
+            label = { Text("Vault name") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        TextButton(
+            onClick = { onSaveVaultName(editName) },
+            enabled = editName != vaultName,
+        ) {
+            Text("Save Vault Name")
         }
 
         Spacer(modifier = Modifier.height(16.dp))

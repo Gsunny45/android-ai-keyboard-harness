@@ -8,6 +8,7 @@ import androidx.documentfile.provider.DocumentFile
 import dev.patrickgold.florisboard.ime.ai.orchestration.AppContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.nio.charset.StandardCharsets
 
 /**
  * Bridges the IME to an Obsidian vault via Storage Access Framework (SAF).
@@ -31,9 +32,10 @@ class ObsidianBridge(
         private const val TAG = "ObsidianBridge"
         private const val PREFS_NAME = "obsidian_bridge"
         private const val KEY_VAULT_URI = "vault_tree_uri"
+        private const val KEY_VAULT_NAME = "vault_name"
 
         /** Obsidian window title regex: "VaultName - path/to/note.md - Obsidian" */
-        private val OBSIDIAN_TITLE = Regex("""^(.+?)\s*-\s*(.+?)\s*-\s*Obsidian$""")
+        val OBSIDIAN_TITLE = Regex("""^(.+?)\s*-\s*(.+?)\s*-\s*Obsidian$""")
     }
 
     // ── Vault URI management ─────────────────────────────────────────────
@@ -67,6 +69,20 @@ class ObsidianBridge(
 
     /** True if a vault directory has been configured via SAF. */
     fun hasVaultAccess(): Boolean = getVaultTreeUri() != null
+
+    // ── Vault name config (manual, since window title is unavailable without AccessibilityService) ──
+
+    /**
+     * Persist a vault name. This is a manual fallback since the IME
+     * cannot read the Obsidian window title without an AccessibilityService.
+     * The vault name is used to resolve {{vault.name}} in system prompts.
+     */
+    fun setVaultName(name: String) {
+        prefs.edit().putString(KEY_VAULT_NAME, name).apply()
+    }
+
+    /** Returns the configured vault name, or null. */
+    fun getVaultName(): String? = prefs.getString(KEY_VAULT_NAME, null)
 
     // ── Title parsing ────────────────────────────────────────────────────
 
@@ -112,7 +128,7 @@ class ObsidianBridge(
             val file = navigateToFile(vaultRoot, filePath) ?: return null
 
             val inputStream = context.contentResolver.openInputStream(file.uri) ?: return null
-            val reader = BufferedReader(InputStreamReader(inputStream))
+            val reader = BufferedReader(InputStreamReader(inputStream, StandardCharsets.UTF_8))
             val content = reader.readText()
             reader.close()
             inputStream.close()
@@ -153,14 +169,8 @@ class ObsidianBridge(
     private fun navigateToFile(root: DocumentFile, filePath: String): DocumentFile? {
         val parts = filePath.split("/")
         var current: DocumentFile = root
-        for (i in parts.indices) {
-            val part = parts[i]
-            val isLast = i == parts.lastIndex
-            current = if (isLast) {
-                current.findFile(part) ?: return null
-            } else {
-                current.findFile(part) ?: return null
-            }
+        for (part in parts) {
+            current = current.findFile(part) ?: return null
         }
         return current
     }
@@ -175,7 +185,7 @@ class ObsidianBridge(
         if (lines.size < 2) return null
         if (lines[0].trim() != "---") return null
 
-        val endIndex = lines.indexOfFirst { it.trim() == "---" && it !== lines[0] }
+        val endIndex = lines.indexOfFirst { it.trim() == "---" && it != lines[0] }
         if (endIndex < 1) return null
 
         val frontmatterLines = lines.subList(0, endIndex + 1)

@@ -6,7 +6,7 @@
       "pipeline": "cot",
       "provider": "local",
       "fallback_provider": "anthropic",
-      "system_template": "You are writing inside Obsidian vault '{{vault.name}}'.\nActive note: {{file.path}}\nTags: {{#each file.tags}}#{{this}} {{/each}}\nWrite documentation that matches the vault's existing style. Use [[wikilinks]] for cross-references. Keep frontmatter intact. End with FINAL: <text>.",
+      "system_template": "You are writing documentation inside an Obsidian vault. Vault name: {{vault.name}}. Active note: {{file.path}}. {{#each file.tags}}Tags: #{{this}} {{/each}}Write documentation using [[wikilinks]] for cross-references and Obsidian-compatible markdown. Keep frontmatter intact. End with FINAL: <text>.",
       "user_template": "{{user_input}}",
       "max_tokens": 2048,
       "extract_pattern": "FINAL:\\s*(.*)",
@@ -28,7 +28,7 @@
       "pipeline": "single",
       "provider": "local",
       "fallback_provider": "gemini_1",
-      "system_template": "Insert [[wikilinks]] around entity names in the user's text where the entity likely has a corresponding note in vault '{{vault.name}}'. Do not invent entities. Return only the linked text.",
+      "system_template": "Insert [[wikilinks]] around entity names in the user's text where the entity likely has a corresponding note. Consider vault context: {{vault.name}}. Do not invent entities. Return only the linked text.",
       "user_template": "{{selection.text|user_input}}",
       "max_tokens": 512,
       "output_mode": "inline"
@@ -37,7 +37,7 @@
       "pipeline": "single",
       "provider": "local",
       "fallback_provider": "anthropic",
-      "system_template": "Generate a daily-note opener for {{system.time.iso}} in vault '{{vault.name}}'. Include: 3 priorities, 1 reflection prompt, 1 carryover from yesterday placeholder. Markdown only.",
+      "system_template": "Generate a daily-note opener for {{system.time.iso}}. Vault: {{vault.name}}. Timezone: {{system.tz}}. Include: 3 priorities, 1 reflection prompt, 1 carryover from yesterday placeholder. Use Obsidian-compatible markdown.",
       "user_template": "{{user_input}}",
       "max_tokens": 600,
       "output_mode": "inline"
@@ -46,7 +46,7 @@
       "pipeline": "single",
       "provider": "local",
       "fallback_provider": "anthropic",
-      "system_template": "Summarize the active note '{{file.path}}' content in 5 bullet points. Preserve any [[wikilinks]] mentioned.",
+      "system_template": "Summarize the following content in 5 bullet points. Active note: {{file.path}}. Preserve any [[wikilinks]] mentioned.",
       "user_template": "{{selection.text|clipboard.text|user_input}}",
       "max_tokens": 400,
       "output_mode": "overlay"

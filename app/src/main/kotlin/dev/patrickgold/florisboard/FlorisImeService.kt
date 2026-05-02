@@ -85,6 +85,7 @@ import dev.patrickgold.florisboard.app.florisPreferenceModel
 import dev.patrickgold.florisboard.ime.ImeUiMode
 import dev.patrickgold.florisboard.ime.ai.PermissionTrampolineActivity
 import dev.patrickgold.florisboard.ime.ai.bridges.AppProfileManager
+import dev.patrickgold.florisboard.ime.ai.bridges.ObsidianBridge
 import dev.patrickgold.florisboard.ime.ai.orchestration.CteEngine
 import dev.patrickgold.florisboard.ime.ai.providers.KeyVault
 import dev.patrickgold.florisboard.ime.ai.trigger.TriggerParser
@@ -368,6 +369,9 @@ class FlorisImeService : LifecycleInputMethodService() {
     /** Tracks which app is in the foreground (for voice auto-routing). */
     private val appProfileManager = AppProfileManager()
 
+    /** Obsidian vault bridge — reads vault context for template variable resolution. */
+    private var obsidianBridge: ObsidianBridge? = null
+
     init {
         setTheme(R.style.FlorisImeTheme)
     }
@@ -396,8 +400,16 @@ class FlorisImeService : LifecycleInputMethodService() {
             },
         )
 
+        // Initialize ObsidianBridge for vault-aware template resolution
+        obsidianBridge = ObsidianBridge(this)
+
         // Initialize CTE engine (warm up — lazy build on first trigger)
-        cteEngine = CteEngine(this, lifecycleScope)
+        cteEngine = CteEngine(
+            context = this,
+            scope = lifecycleScope,
+            obsidianBridge = obsidianBridge,
+            appProfileManager = appProfileManager,
+        )
         cteEngine?.warmUp()
 
         // Initialize voice input manager (in-process SpeechRecognizer, no external app)
